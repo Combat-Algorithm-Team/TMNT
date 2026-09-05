@@ -145,8 +145,8 @@ void GimbalInit()
         .motor_type = DM_Motor,
         .controller_param_init_config ={
             .angle_PID = {
-                .Kp = 50,
-                .Ki = 100,
+                .Kp = 30,
+                .Ki = 50,
                 .Kd = 0.0,
                 .DeadBand = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit ,
@@ -154,8 +154,8 @@ void GimbalInit()
                 .MaxOut = 30,
             },
             .speed_PID = {
-                .Kp = 1,
-                .Ki = 0.8,
+                .Kp = 0.5,
+                .Ki = 0.6,
                 .Kd = 0.001,
                 .DeadBand = 0,
                 .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit ,
@@ -275,7 +275,7 @@ void GimbalTask()
     SubGetMessage(gimbal_sub, &gimbal_cmd_recv);
 
 #ifdef GIMBAL_BOARD
-    pitch_tor_feedforward_ori = 0.8 * tan(0.82 - abs(gimbal_IMU_data->output.INS_angle[INS_PITCH_ADDRESS_OFFSET]));
+    pitch_tor_feedforward_ori = 0.0f;//0.8 * tan(0.82 - abs(gimbal_IMU_data->output.INS_angle[INS_PITCH_ADDRESS_OFFSET]));
     if(gimbal_cmd_recv.control_type == NUC_CONTROL)
     {
         pitch_vel_feedforward   = NUC_cmd.pitch_vel;
