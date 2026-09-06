@@ -64,6 +64,14 @@ steering_wheelset_t wheelset_lf, wheelset_rf, wheelset_rb, wheelset_lb;
 static float wheel_torque_ff_lf, wheel_torque_ff_rf, wheel_torque_ff_rb, wheel_torque_ff_lb;
 static float chassis_ax, chassis_ay, chassis_alpha_z;
 chassis_speed_measure_t speed_measure;
+volatile chassis_mass_identification_data_t chassis_mass_identification_data;
+#if CHASSIS_MASS_IDENTIFICATION_ENABLE || CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+static uint32_t mass_identification_tick;
+static float mass_identification_force_x;
+static float mass_identification_force_y;
+static float mass_identification_torque_z;
+#endif
+static float mass_identification_last_wz;
 volatile uint32_t power_calib_sample_cnt;
 volatile float power_calib_cap_power_w;
 volatile float power_calib_x_abs_omega_sum;
@@ -90,7 +98,7 @@ static PIDInstance Chassis_Follow_PID = {
 
 /* 车体速度环：目标为期望速度，反馈为底盘正运动学测得的实际速度，输出为目标加速度。 */
 static PIDInstance Chassis_Acceleration_X_PID = {
-    .Kp            = 100.0f,
+    .Kp            = 10.0f,
     .Ki            = 0.0f,
     .Kd            = 0.0f,
     .DeadBand      = 0.0f,
@@ -99,7 +107,7 @@ static PIDInstance Chassis_Acceleration_X_PID = {
     .MaxOut        = 300000.0f,
 };
 static PIDInstance Chassis_Acceleration_Y_PID = {
-    .Kp            = 100.0f,
+    .Kp            = 10.0f,
     .Ki            = 0.0f,
     .Kd            = 0.0f,
     .DeadBand      = 0.0f,
@@ -108,7 +116,7 @@ static PIDInstance Chassis_Acceleration_Y_PID = {
     .MaxOut        = 300000.0f,
 };
 static PIDInstance Chassis_Acceleration_Z_PID = {
-    .Kp            = 10.0f,
+    .Kp            = 100.0f,
     .Ki            = 0.0f,
     .Kd            = 0.0f,
     .DeadBand      = 0.0f,
@@ -116,9 +124,6 @@ static PIDInstance Chassis_Acceleration_Z_PID = {
     .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit | PID_Derivative_On_Measurement,
     .MaxOut        = 1000.0f,
 };
-
-/* 用于自旋变速策略的时间变量 */
-// static float t;
 
 /* 私有函数计算的中间变量，设为静态以避免参数传递开销 */
 static float chassis_vx, chassis_vy, chassis_vw; // 将云台坐标系速度投影到底盘坐标系
@@ -130,6 +135,144 @@ static volatile float chassis_offset_delay_s        = 0.4f;
 static volatile float chassis_offset_ff_limit_deg   = 90.0f;
 static volatile float chassis_offset_ff_min_speed   = 100.0f;
 static volatile float chassis_offset_ff_full_speed  = CHASSIS_HIGH_SPEED * 2.0f;
+
+#if CHASSIS_MASS_IDENTIFICATION_ENABLE || CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+static void ChassisMassIdentificationCommand(void)
+{
+#if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    static const float torque_sequence_nm[] = {0.0f, 15.0f, 0.0f, -15.0f, 0.0f,
+                                               -15.0f, 0.0f, 15.0f, 0.0f};
+#else
+    static const float force_sequence_n[] = {0.0f, 50.0f, 0.0f, -50.0f, 0.0f,
+                                             -50.0f, 0.0f, 50.0f, 0.0f};
+#endif
+    static const uint16_t duration_ms[] = {1000U, 600U, 600U, 600U, 1000U,
+                                           600U, 600U, 600U, 1000U};
+    const float speed_limit_mm_s = 1500.0f;
+    uint32_t elapsed = mass_identification_tick;
+    uint32_t phase = 0U;
+    uint32_t phase_count = sizeof(duration_ms) / sizeof(duration_ms[0]);
+    uint32_t cycle_ticks = 0U;
+    uint32_t i;
+
+    if (chassis_cmd_recv.chassis_mode == CHASSIS_ZERO_FORCE) {
+        mass_identification_tick = 0U;
+        mass_identification_force_x = 0.0f;
+        mass_identification_force_y = 0.0f;
+        mass_identification_torque_z = 0.0f;
+        chassis_mass_identification_data.enable = 0U;
+        chassis_mass_identification_data.phase = 0U;
+        return;
+    }
+
+    for (i = 0U; i < phase_count; ++i) cycle_ticks += duration_ms[i];
+    elapsed %= cycle_ticks;
+    for (phase = 0U; phase < phase_count - 1U; ++phase) {
+        if (elapsed < duration_ms[phase]) break;
+        elapsed -= duration_ms[phase];
+    }
+
+    chassis_mass_identification_data.enable = 1U;
+    chassis_mass_identification_data.phase = (uint8_t)phase;
+#if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    mass_identification_force_x = 0.0f;
+    mass_identification_force_y = 0.0f;
+    mass_identification_torque_z = torque_sequence_nm[phase];
+    chassis_cmd_recv.vx = 0.0f;
+    chassis_cmd_recv.vy = 0.0f;
+#else
+    mass_identification_force_x = force_sequence_n[phase];
+    mass_identification_force_y = 0.0f;
+    if (fabsf(speed_measure.real_vx) > speed_limit_mm_s &&
+        mass_identification_force_x * speed_measure.real_vx > 0.0f) {
+        mass_identification_force_x = 0.0f;
+    }
+
+    /* 该速度仅用于让舵轮保持直行；轮向实际输入由车体力直接分配。 */
+    chassis_cmd_recv.vx = (mass_identification_force_x < 0.0f ? -100.0f : 100.0f) *
+                          SPEED_TO_DJI_MOTOR_APS;
+    chassis_cmd_recv.vy = 0.0f;
+#endif
+    chassis_cmd_recv.wz = 0.0f;
+    chassis_cmd_recv.chassis_mode = CHASSIS_NO_FOLLOW;
+    mass_identification_tick++;
+}
+#else
+static void ChassisMassIdentificationCommand(void) {}
+#endif
+
+#if CHASSIS_MASS_IDENTIFICATION_ENABLE || CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+static void ChassisMassIdentificationUpdate(void)
+{
+    float ax = 0.0f, ay = 0.0f, fx = 0.0f, fy = 0.0f;
+    float mz = 0.0f;
+    DJIMotorInstance *motors[4] = {motor_lf, motor_rf, motor_rb, motor_lb};
+    const steering_wheelset_t *wheels[4] = {&wheelset_lf, &wheelset_rf, &wheelset_rb, &wheelset_lb};
+    int i;
+    if (chassis_IMU_data != NULL) {
+        ax = chassis_IMU_data->INS_data.INS_accel[0];
+        ay = chassis_IMU_data->INS_data.INS_accel[1];
+    }
+    chassis_mass_identification_data.actual_ax = ax;
+    chassis_mass_identification_data.actual_ay = ay;
+    chassis_mass_identification_data.actual_wz = speed_measure.real_wz;
+    chassis_mass_identification_data.actual_alpha_z =
+        (speed_measure.real_wz - mass_identification_last_wz) * 1000.0f;
+    mass_identification_last_wz = speed_measure.real_wz;
+    chassis_mass_identification_data.actual_vx = speed_measure.real_vx * 0.001f;
+    chassis_mass_identification_data.actual_vy = speed_measure.real_vy * 0.001f;
+#if CHASSIS_MASS_IDENTIFICATION_ENABLE && !CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    chassis_mass_identification_data.target_vx = 0.0f;
+    chassis_mass_identification_data.target_vy = 0.0f;
+    chassis_mass_identification_data.target_force_x = mass_identification_force_x;
+    chassis_mass_identification_data.target_force_y = mass_identification_force_y;
+    chassis_mass_identification_data.target_ax = mass_identification_force_x / TOTAL_MASS_KG;
+    chassis_mass_identification_data.target_ay = mass_identification_force_y / TOTAL_MASS_KG;
+#else
+    chassis_mass_identification_data.target_vx = 0.0f;
+    chassis_mass_identification_data.target_vy = 0.0f;
+    chassis_mass_identification_data.target_force_x = 0.0f;
+    chassis_mass_identification_data.target_force_y = 0.0f;
+    chassis_mass_identification_data.target_ax = 0.0f;
+    chassis_mass_identification_data.target_ay = 0.0f;
+#endif
+#if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    chassis_mass_identification_data.target_torque_z = mass_identification_torque_z;
+#else
+    chassis_mass_identification_data.target_torque_z = 0.0f;
+#endif
+    for (i = 0; i < 4; ++i) {
+        float force;
+        if (motors[i] == NULL) continue;
+        force = (float)motors[i]->measure.real_current * CHASSIS_WHEEL_TORQUE_NM_PER_RAW /
+                (RADIUS_WHEEL * 0.001f);
+        if (wheels[i]->reverse_flag) force = -force;
+        fx += force * arm_cos_f32(wheels[i]->angle_speed);
+        fy += force * (-arm_sin_f32(wheels[i]->angle_speed));
+    }
+    chassis_mass_identification_data.resultant_force_x = fx;
+    chassis_mass_identification_data.resultant_force_y = fy;
+    /* 偏航力矩由力臂项反算，使用当前轮向方向和底盘几何尺寸。 */
+    for (i = 0; i < 4; ++i) {
+        float ux = arm_cos_f32(wheels[i]->angle_speed);
+        float uy = -arm_sin_f32(wheels[i]->angle_speed);
+        float force;
+        if (motors[i] == NULL) continue;
+        force = (float)motors[i]->measure.real_current * CHASSIS_WHEEL_TORQUE_NM_PER_RAW /
+                (RADIUS_WHEEL * 0.001f);
+        if (wheels[i]->reverse_flag) force = -force;
+        mz += force * (ux * (i == LF || i == LB ? TRACK_WIDTH * 0.0005f : -TRACK_WIDTH * 0.0005f) -
+                       uy * (i == LF || i == RF ? WHEEL_BASE * 0.0005f : -WHEEL_BASE * 0.0005f));
+    }
+    chassis_mass_identification_data.resultant_moment_z = mz;
+}
+#else
+static void ChassisMassIdentificationUpdate(void) {}
+#endif
+
+/* 用于自旋变速策略的时间变量 */
+// static float t;
+
 void ChassisInit()
 {
 #ifdef CHASSIS_BOARD
@@ -338,25 +481,28 @@ static void ChassisAccelerationPlan(float *ax, float *ay, float *alpha_z)
     *alpha_z = PIDCalculate(&Chassis_Acceleration_Z_PID, speed_measure.real_wz, chassis_vw);
 }
 
+float force[4], ux[4], uy[4], moment_arm[4];
+
 /**
  * @brief 将车体动力学需求分配为四轮力矩前馈。
  * @param 无；使用全局加速度、目标舵角和底盘几何参数。
  * @note 线加速度输入为 mm/s^2，内部换算为 m/s^2；输出为 DJI 原始电流指令。
  *       使用离线推导的直接分配式，不在控制周期内进行矩阵求逆。
  */
-static void ChassisTorqueFeedforwardCalc(void)
+static void ChassisTorqueFeedforwardCalc(float target_force_x,
+                                         float target_force_y,
+                                         float target_torque_z)
 {
     /* 刚体平面动力学：F = m*a，Mz = Iz*alpha；再将车体合力/力矩
      * 通过轮向单位向量构成的分配矩阵，以最小范数方式分配到四个轮。 */
-    const float ht = TRACK_WIDTH * 0.5f;
-    const float hb = WHEEL_BASE * 0.5f;
+    /* 底盘尺寸在 robot_def.h 中以 mm 定义；动力学力矩使用 N·m，
+     * 因此这里直接将半轮距、半轴距换算为 m，保证 M = r × F 的单位一致。 */
+    const float ht = TRACK_WIDTH * 0.0005f;
+    const float hb = WHEEL_BASE * 0.0005f;
     const float *angles[4] = {&wheelset_lf.angle_speed, &wheelset_rf.angle_speed,
                               &wheelset_rb.angle_speed, &wheelset_lb.angle_speed};
-    float force[4], ux[4], uy[4], moment_arm[4];
     /* 加速度为 mm/s^2，乘 0.001 转为 m/s^2；力矩单位为 N*m。 */
-    float wrench[3] = {TOTAL_MASS_KG * chassis_ax * 0.001f,
-                       TOTAL_MASS_KG * chassis_ay * 0.001f,
-                       CHASSIS_YAW_INERTIA_KG_M2 * chassis_alpha_z};
+    float wrench[3] = {target_force_x, target_force_y, target_torque_z};
     float *out[4] = {&wheel_torque_ff_lf, &wheel_torque_ff_rf, &wheel_torque_ff_rb, &wheel_torque_ff_lb};
     int s[4] = {1, -1, -1, 1};
     float yaw_norm = 0.0f;
@@ -368,7 +514,6 @@ static void ChassisTorqueFeedforwardCalc(void)
         moment_arm[i] = ux[i] * s[i] * ht - uy[i] * hb * (i < 2 ? 1.0f : -1.0f);
         yaw_norm += moment_arm[i] * moment_arm[i];
     }
-    
 
     if (yaw_norm < 1.0e-6f) yaw_norm = 1.0f;
     for (i = 0; i < 4; ++i) {
@@ -381,9 +526,45 @@ static void ChassisTorqueFeedforwardCalc(void)
         /* 轮端切向力乘轮半径得到 N*m，再换算为 DJI 原始电流指令。 */
         *out[i] = abs_limit(force[i] * RADIUS_WHEEL * 0.001f * CHASSIS_WHEEL_TORQUE_TO_CURRENT,
                             CHASSIS_TORQUE_FF_MAX_NM * CHASSIS_WHEEL_TORQUE_TO_CURRENT);
-        if (!CHASSIS_TORQUE_FF_ENABLE || fabsf(force[i] * RADIUS_WHEEL * 0.001f) < CHASSIS_TORQUE_FF_ZERO_DEADBAND_NM)
+        if (!CHASSIS_TORQUE_FF_ENABLE)
             *out[i] = 0.0f;
+#if !CHASSIS_MASS_IDENTIFICATION_ENABLE && !CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+        else if (fabsf(force[i] * RADIUS_WHEEL * 0.001f) < CHASSIS_TORQUE_FF_ZERO_DEADBAND_NM)
+            *out[i] = 0.0f;
+#endif
     }
+}
+
+/* 单个舵轮的逆运动学。rx/ry 是轮心相对底盘中心的坐标（x 向前、y 向右）。 */
+static void SteeringCalculateWheel(steering_wheelset_t *wheel, DJIMotorInstance *steering,
+                                   float rx, float ry, float encoder_zero)
+{
+    float target_angle_deg;
+
+    /* 刚体平面运动：轮心速度 v_i = [vx - wz*ry, vy + wz*rx]。 */
+    wheel->vx = chassis_vx - chassis_vw * ry;
+    wheel->vy = chassis_vy + chassis_vw * rx;
+
+    /* 舵机编码器角度沿用现有约定。舵角方向前的负号保持原坐标方向不变。 */
+    wheel->angle_measure = ((float)steering->measure.ecd - encoder_zero) * ECD_ANGLE_COEF_DJI;
+    wheel->angle_speed = -atan2f(wheel->vy, wheel->vx);
+    target_angle_deg = wheel->angle_speed * RAD_2_DEGREE;
+
+    /* 将舵角误差归一化到 [-180, 180]，避免跨圈时产生大幅转动。 */
+    wheel->rotate_range = theta_format(target_angle_deg - wheel->angle_measure);
+
+    /* 舵角超过 90° 时转 180°，同时反转轮速，轮子实际速度矢量保持不变。 */
+    wheel->reverse_flag = (fabsf(wheel->rotate_range) > 90.0f) ? 1U : 0U;
+    if (wheel->reverse_flag) {
+        wheel->rotate_range += (wheel->rotate_range > 0.0f) ? -180.0f : 180.0f;
+    }
+    wheel->angle_target = wheel->angle_measure + wheel->rotate_range;
+    wheel->angle_ref = steering->measure.total_angle + wheel->rotate_range;
+
+    /* 轮速取轮心速度在当前舵角方向上的投影，再换算为电机转速单位。 */
+    wheel->angle_diff = target_angle_deg - wheel->angle_measure;
+    wheel->vt = arm_cos_f32(DEGREE_2_RAD * wheel->angle_diff) *
+                sqrtf(wheel->vx * wheel->vx + wheel->vy * wheel->vy) * SPEED_TO_DJI_MOTOR_APS;
 }
 
 /**
@@ -393,114 +574,16 @@ static void ChassisTorqueFeedforwardCalc(void)
  */
 static void SteeringCalculate(void)
 {
-    /* 逆运动学：轮中心速度 v_i=[vx-wz*ry, vy+wz*rx]。
-     * angle_speed 为轮向目标方向，vt 为投影到当前舵角后的轮向速度。 */
     const float half_track = TRACK_WIDTH * 0.5f;
     const float half_base = WHEEL_BASE * 0.5f;
-    wheelset_lf.vx = chassis_vx + chassis_vw * half_track;
-    wheelset_lf.vy = chassis_vy - chassis_vw * half_base;
-    wheelset_lf.angle_measure   = ((float)steering_lf->measure.ecd - STEERING_LF_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_lf.angle_speed     = -atan2f(wheelset_lf.vy, wheelset_lf.vx);
-    wheelset_lf.rotate_range    = wheelset_lf.angle_speed * RAD_2_DEGREE - wheelset_lf.angle_measure;
-    if (wheelset_lf.rotate_range > 180.0f)
-        wheelset_lf.rotate_range -= 360.0f;
-    if (wheelset_lf.rotate_range < -180.0f)
-        wheelset_lf.rotate_range += 360.0f;
-    wheelset_lf.reverse_flag = 0;
-    if (fabsf(wheelset_lf.rotate_range) > 90.0f) {
-        wheelset_lf.reverse_flag = 1;
-        if (wheelset_lf.rotate_range > 0.0f) {
-            wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range - 180.0f;
-            wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range - 180.0f;
-        } else {
-            wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range + 180.0f;
-            wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range;
-        wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range;
-    }
-    wheelset_lf.angle_diff      = RAD_2_DEGREE * wheelset_lf.angle_speed - wheelset_lf.angle_measure;
-    wheelset_lf.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_lf.angle_diff) * sqrtf(wheelset_lf.vx * wheelset_lf.vx + wheelset_lf.vy * wheelset_lf.vy) * SPEED_TO_DJI_MOTOR_APS;
-    
-    wheelset_rf.vx = chassis_vx - chassis_vw * half_track;
-    wheelset_rf.vy = chassis_vy - chassis_vw * half_base;
-    wheelset_rf.angle_measure   = ((float)steering_rf->measure.ecd - STEERING_RF_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_rf.angle_speed     = -atan2f(wheelset_rf.vy, wheelset_rf.vx);
-    wheelset_rf.rotate_range    = wheelset_rf.angle_speed * RAD_2_DEGREE - wheelset_rf.angle_measure;
-    if (wheelset_rf.rotate_range > 180.0f)
-        wheelset_rf.rotate_range -= 360.0f;
-    if (wheelset_rf.rotate_range < -180.0f)
-        wheelset_rf.rotate_range += 360.0f;
-    wheelset_rf.reverse_flag = 0;
-    if (fabsf(wheelset_rf.rotate_range) > 90.0f) {
-        wheelset_rf.reverse_flag = 1;
-        if (wheelset_rf.rotate_range > 0.0f) {
-            wheelset_rf.angle_target = wheelset_rf.angle_measure + wheelset_rf.rotate_range - 180.0f;
-            wheelset_rf.angle_ref = steering_rf->measure.total_angle + wheelset_rf.rotate_range - 180.0f;
-        } else {
-            wheelset_rf.angle_target = wheelset_rf.angle_measure + wheelset_rf.rotate_range + 180.0f;
-            wheelset_rf.angle_ref = steering_rf->measure.total_angle + wheelset_rf.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_rf.angle_target = wheelset_rf.angle_measure + wheelset_rf.rotate_range;
-        wheelset_rf.angle_ref = steering_rf->measure.total_angle + wheelset_rf.rotate_range;
-    }
-    wheelset_rf.angle_diff      = RAD_2_DEGREE * wheelset_rf.angle_speed - wheelset_rf.angle_measure;
-    wheelset_rf.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_rf.angle_diff) * sqrtf(wheelset_rf.vx * wheelset_rf.vx + wheelset_rf.vy * wheelset_rf.vy) * SPEED_TO_DJI_MOTOR_APS;
 
-    wheelset_rb.vx = chassis_vx - chassis_vw * half_track;
-    wheelset_rb.vy = chassis_vy + chassis_vw * half_base;
-    wheelset_rb.angle_measure   = ((float)steering_rb->measure.ecd - STEERING_RB_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_rb.angle_speed     = -atan2f(wheelset_rb.vy, wheelset_rb.vx);
-    wheelset_rb.rotate_range    = wheelset_rb.angle_speed * RAD_2_DEGREE - wheelset_rb.angle_measure;
-    if (wheelset_rb.rotate_range > 180.0f)
-        wheelset_rb.rotate_range -= 360.0f;
-    if (wheelset_rb.rotate_range < -180.0f)
-        wheelset_rb.rotate_range += 360.0f;
-    wheelset_rb.reverse_flag = 0;
-    if (fabsf(wheelset_rb.rotate_range) > 90.0f) {
-        wheelset_rb.reverse_flag = 1;
-        if (wheelset_rb.rotate_range > 0.0f) {
-            wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range - 180.0f;
-            wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range - 180.0f;
-        } else {
-            wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range + 180.0f;
-            wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range;
-        wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range;
-    }
-    wheelset_rb.angle_diff      = RAD_2_DEGREE * wheelset_rb.angle_speed - wheelset_rb.angle_measure;
-    wheelset_rb.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_rb.angle_diff) * sqrtf(wheelset_rb.vx * wheelset_rb.vx + wheelset_rb.vy * wheelset_rb.vy) * SPEED_TO_DJI_MOTOR_APS;
-
-    wheelset_lb.vx = chassis_vx + chassis_vw * half_track;
-    wheelset_lb.vy = chassis_vy + chassis_vw * half_base;
-    wheelset_lb.angle_measure   = ((float)steering_lb->measure.ecd - STEERING_LB_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_lb.angle_speed     = -atan2f(wheelset_lb.vy, wheelset_lb.vx);
-    wheelset_lb.rotate_range    = wheelset_lb.angle_speed * RAD_2_DEGREE - wheelset_lb.angle_measure;
-    if (wheelset_lb.rotate_range > 180.0f)
-        wheelset_lb.rotate_range -= 360.0f;
-    if (wheelset_lb.rotate_range < -180.0f)
-        wheelset_lb.rotate_range += 360.0f;
-    wheelset_lb.reverse_flag = 0;
-    if (fabsf(wheelset_lb.rotate_range) > 90.0f) {
-        wheelset_lb.reverse_flag = 1;
-        if (wheelset_lb.rotate_range > 0.0f) {
-            wheelset_lb.angle_target = wheelset_lb.angle_measure + wheelset_lb.rotate_range - 180.0f;
-            wheelset_lb.angle_ref = steering_lb->measure.total_angle + wheelset_lb.rotate_range - 180.0f;
-        } else {
-            wheelset_lb.angle_target = wheelset_lb.angle_measure + wheelset_lb.rotate_range + 180.0f;
-            wheelset_lb.angle_ref = steering_lb->measure.total_angle + wheelset_lb.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_lb.angle_target = RAD_2_DEGREE * wheelset_lb.angle_speed + wheelset_lb.rotate_range;
-        wheelset_lb.angle_ref = steering_lb->measure.total_angle + wheelset_lb.rotate_range;
-    }
-    wheelset_lb.angle_diff      = RAD_2_DEGREE * wheelset_lb.angle_speed - wheelset_lb.angle_measure;
-    wheelset_lb.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_lb.angle_diff) * sqrtf(wheelset_lb.vx * wheelset_lb.vx + wheelset_lb.vy * wheelset_lb.vy) * SPEED_TO_DJI_MOTOR_APS;
+    /* 四个轮心坐标对应原有 LF、RF、RB、LB 的速度正负号。 */
+    SteeringCalculateWheel(&wheelset_lf, steering_lf, -half_base, -half_track, STEERING_LF_ECD);
+    SteeringCalculateWheel(&wheelset_rf, steering_rf, -half_base, +half_track, STEERING_RF_ECD);
+    SteeringCalculateWheel(&wheelset_rb, steering_rb, +half_base, +half_track, STEERING_RB_ECD);
+    SteeringCalculateWheel(&wheelset_lb, steering_lb, +half_base, -half_track, STEERING_LB_ECD);
 }
+
 static uint8_t supercap_task_div_cnt = 0;
 
 #if POWER_CALIBRATION_ENABLE
@@ -767,9 +850,21 @@ static void ChassisSpeedMap()
     const float rotate_deadband = 10.0f / (CHASSIS_R * SPEED_TO_DJI_MOTOR_APS);
 
     // 根据云台与底盘的角度 offset 将控制量映射到底盘坐标系
+    // 辨识期间输入已经定义在底盘坐标系，必须跳过云台坐标变换。
+#if CHASSIS_MASS_IDENTIFICATION_ENABLE || CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+#if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    chassis_vx = 0.0f;
+    chassis_vy = 0.0f;
+    chassis_vw = 0.8f;
+#else
+    chassis_vx = chassis_cmd_recv.vx;
+    chassis_vy = 0.0f;
+#endif
+#else
     // 底盘逆时针为角度正方向；云台指向作为 y 轴
     chassis_vx = chassis_cmd_recv.vx * cos_theta - chassis_cmd_recv.vy * sin_theta;
     chassis_vy = chassis_cmd_recv.vx * sin_theta + chassis_cmd_recv.vy * cos_theta;
+#endif
 
     if (fabsf(chassis_vx) < speed_deadband && fabsf(chassis_vy) < speed_deadband && fabsf(chassis_vw) < rotate_deadband)
     {
@@ -782,7 +877,7 @@ static void ChassisSpeedMap()
 /**
  * @brief 根据四轮实际轮速和舵角执行底盘正运动学解算。
  * @param 无；从四个轮向电机和舵向电机读取反馈。
- * @note 采用四轮速度分量的显式平均公式，并通过滑动窗口滤波后发布反馈。
+ * @note 采用四轮速度分量的显式平均公式，直接发布当前解算结果。
  */
 static void ChassisSpeedMeasure()
 {
@@ -793,7 +888,6 @@ static void ChassisSpeedMeasure()
     float lf_speed, rf_speed, rb_speed, lb_speed;
     float lf_angle, rf_angle, rb_angle, lb_angle;
     float raw_vx, raw_vy, raw_wz;
-    float sample_count;
     float lf_vx, rf_vx, rb_vx, lb_vx;
     float lf_vy, rf_vy, rb_vy, lb_vy;
 
@@ -832,29 +926,9 @@ static void ChassisSpeedMeasure()
     raw_wz = ((lf_vx - rf_vx - rb_vx + lb_vx) / (4.0f * half_track) +
               (-lf_vy - rf_vy + rb_vy + lb_vy) / (4.0f * half_base)) * 0.5f;
 
-    speed_measure.vx_sum -= speed_measure.vx_window[speed_measure.window_index];
-    speed_measure.vy_sum -= speed_measure.vy_window[speed_measure.window_index];
-    speed_measure.wz_sum -= speed_measure.wz_window[speed_measure.window_index];
-    speed_measure.vx_window[speed_measure.window_index] = raw_vx;
-    speed_measure.vy_window[speed_measure.window_index] = raw_vy;
-    speed_measure.wz_window[speed_measure.window_index] = raw_wz;
-    speed_measure.vx_sum += raw_vx;
-    speed_measure.vy_sum += raw_vy;
-    speed_measure.wz_sum += raw_wz;
-
-    if (speed_measure.window_count < CHASSIS_SPEED_MEASURE_WINDOW_SIZE) {
-        speed_measure.window_count++;
-    }
-
-    speed_measure.window_index++;
-    if (speed_measure.window_index >= CHASSIS_SPEED_MEASURE_WINDOW_SIZE) {
-        speed_measure.window_index = 0;
-    }
-
-    sample_count = (float)speed_measure.window_count;
-    speed_measure.real_vx = speed_measure.vx_sum / sample_count;
-    speed_measure.real_vy = speed_measure.vy_sum / sample_count;
-    speed_measure.real_wz = speed_measure.wz_sum / sample_count;
+    speed_measure.real_vx = raw_vx;
+    speed_measure.real_vy = raw_vy;
+    speed_measure.real_wz = raw_wz;
 
     chassis_feedback_data.real_vx = speed_measure.real_vx;
     chassis_feedback_data.real_vy = speed_measure.real_vy;
@@ -1070,6 +1144,7 @@ void ChassisTask()
     // 获取新的控制信息
 
     SubGetMessage(chassis_sub, &chassis_cmd_recv);
+    ChassisMassIdentificationCommand();
     
 #ifdef CHASSIS_BOARD
     ChassisSpeedMeasure();
@@ -1131,19 +1206,7 @@ void ChassisTask()
             //  else {
             //      offset_angle = -(chassis_cmd_recv.offset_angle >= 0 ? chassis_cmd_recv.offset_angle - 180 : chassis_cmd_recv.offset_angle + 180);
             //  }
-            if(comm_cmd_data.terrain_state == TERRAIN_BUMP)
-            {
-                const float speed_deadband = 15.0f / SPEED_TO_DJI_MOTOR_APS;
-                float chassis_speed = sqrtf(chassis_vx * chassis_vx + chassis_vy * chassis_vy);
-
-                if (chassis_speed >= speed_deadband) {
-                    chassis_vw = PIDCalculate(&Chassis_Follow_PID, chassis_speed_direction, 0);
-                } else {
-                    chassis_vw = 1.0f / (CHASSIS_R * SPEED_TO_DJI_MOTOR_APS);
-                }
-            }
-            else
-                chassis_vw = PIDCalculate(&Chassis_Follow_PID, chassis_cmd_recv.align_angle, 0);
+            chassis_vw = PIDCalculate(&Chassis_Follow_PID, chassis_cmd_recv.align_angle, 0);
 
 
             ramp_init(&rotate_ramp, 250);
@@ -1184,7 +1247,16 @@ void ChassisTask()
     ChassisAccelerationPlan(&chassis_ax, &chassis_ay, &chassis_alpha_z);
     // 根据控制模式进行正运动学解算,计算底盘输出
     SteeringCalculate();
-    ChassisTorqueFeedforwardCalc();
+#if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
+    ChassisTorqueFeedforwardCalc(0.0f, 0.0f, mass_identification_torque_z);
+#elif CHASSIS_MASS_IDENTIFICATION_ENABLE
+    ChassisTorqueFeedforwardCalc(mass_identification_force_x, mass_identification_force_y, 0.0f);
+#else
+    ChassisTorqueFeedforwardCalc(TOTAL_MASS_KG * chassis_ax * 0.001f,
+                                 TOTAL_MASS_KG * chassis_ay * 0.001f,
+                                 CHASSIS_YAW_INERTIA_KG_M2 * chassis_alpha_z);
+#endif
+    ChassisMassIdentificationUpdate();
 
     DJIMotorSetRef(steering_lf, wheelset_lf.angle_ref);
     DJIMotorSetRef(steering_rf, wheelset_rf.angle_ref);

@@ -1,6 +1,8 @@
 #ifndef CHASSIS_H
 #define CHASSIS_H
 
+#include "robot_def.h"
+
 /**
  * @brief 底盘应用初始化,请在开启rtos之前调用(目前会被RobotInit()调用)
  * 
@@ -12,5 +14,6 @@ void ChassisInit();
  * 
  */
 void ChassisTask();
+extern volatile chassis_mass_identification_data_t chassis_mass_identification_data;
 
 #endif // CHASSIS_H

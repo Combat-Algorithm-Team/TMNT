@@ -77,13 +77,16 @@
 #define CHASSIS_SPEED          40000 // 键盘控制不限功率时底盘最大移动速度
 #define CHASSIS_SPEED_MEASURE_WINDOW_SIZE 20U
 #define CHASSIS_HIGH_SPEED                  3000.0f     //mm/s
-#define TOTAL_MASS_KG                       18.0f        // 整车质量(kg)，需实车标定
-#define CHASSIS_YAW_INERTIA_KG_M2            1.20f        // 绕Z轴等效转动惯量(kg*m^2)，需标定
+#define TOTAL_MASS_KG                       29.79f        // 整车质量(kg)，需实车标定
+#define CHASSIS_YAW_INERTIA_KG_M2           1.28242945f        // 绕Z轴等效转动惯量(kg*m^2)，需标定
+#define CHASSIS_MASS_IDENTIFICATION_ENABLE        0           // 质量辨识测试：开启后输入车体力脉冲
+#define CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE 0      // 偏航转动惯量辨识：开启后输入车体偏航力矩脉冲
 #define CHASSIS_TORQUE_FF_ENABLE             1            // 轮向动力学力矩前馈开关
-#define CHASSIS_TORQUE_FF_ZERO_DEADBAND_NM   0.01f        // 小于此力矩时不改变舵角/前馈(N*m)
+#define CHASSIS_TORQUE_FF_ZERO_DEADBAND_NM   0.1f        // 小于此力矩时不改变舵角/前馈(N*m)
 #define CHASSIS_TORQUE_FF_MAX_NM             8.0f         // 单轮前馈力矩安全上限(N*m)
-/* M3508/C620 轮端力矩到原始电流指令的换算：16384 对应 20 A，3 A 对应电机侧 8 N*m。 */
-#define CHASSIS_WHEEL_TORQUE_TO_CURRENT     ((16384.0f / 20.0f) * (3.0f / (8.0f * REDUCTION_RATIO_WHEEL)))
+/* M3508/C620：19:1 减速箱输出端约 0.3 N*m/A，C620 的 16384 raw 对应 20 A。 */
+#define CHASSIS_WHEEL_TORQUE_NM_PER_RAW      (0.3f * (20.0f / 16384.0f))
+#define CHASSIS_WHEEL_TORQUE_TO_CURRENT      (1.0f / CHASSIS_WHEEL_TORQUE_NM_PER_RAW)
 #define YAW_K                  0.0004f
 #define PITCH_K                0.000004f
 
@@ -232,6 +235,28 @@ typedef struct {
     uint8_t window_index;
     uint8_t window_count;
 } chassis_speed_measure_t;
+
+/* 质量辨识数据，调试器可直接观察该全局变量。加速度单位为 m/s^2，力单位为 N。 */
+typedef struct {
+    uint8_t enable;
+    uint8_t phase;
+    float target_vx;
+    float target_vy;
+    float actual_vx;
+    float actual_vy;
+    float target_force_x;
+    float target_force_y;
+    float target_torque_z;
+    float target_ax;
+    float target_ay;
+    float actual_ax;
+    float actual_ay;
+    float actual_wz;
+    float actual_alpha_z;
+    float resultant_force_x;
+    float resultant_force_y;
+    float resultant_moment_z;
+} chassis_mass_identification_data_t;
 
 /* ----------------CMD 应用发布的控制数据，应由 gimbal/chassis/shoot/UI 订阅---------------- */
 /**
