@@ -18,8 +18,8 @@
 
 /* 开发板类型定义，烧录时注意不要弄错对应功能；修改定义后需要重新编译；只能存在一个定义 */
 // #define ONE_BOARD // 单板控制整车
-#define CHASSIS_BOARD // 底盘板
-//#define GIMBAL_BOARD  // 云台板
+//#define CHASSIS_BOARD // 底盘板
+#define GIMBAL_BOARD  // 云台板
 
 //#define VISION_USE_VCP // 使用虚拟串口发送视觉数据
 // #define VISION_USE_UART // 使用串口发送视觉数据
@@ -77,6 +77,9 @@
 #define CHASSIS_SPEED          40000 // 键盘控制不限功率时底盘最大移动速度
 #define CHASSIS_SPEED_MEASURE_WINDOW_SIZE 20U
 #define CHASSIS_HIGH_SPEED                  3000.0f     //mm/s
+#define CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MIN_RAD_S    -5.0f  // 角速度下限（rad/s）
+#define CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MAX_RAD_S    5.0f // 角速度上限（rad/s）
+#define CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_ACCELERATION_RAD_S2 10.0f // 角加速度（rad/s^2）
 #define TOTAL_MASS_KG                       29.79f        // 整车质量(kg)，需实车标定
 #define CHASSIS_YAW_INERTIA_KG_M2           1.28242945f        // 绕Z轴等效转动惯量(kg*m^2)，需标定
 #define CHASSIS_MASS_IDENTIFICATION_ENABLE        0           // 质量辨识测试：开启后输入车体力脉冲

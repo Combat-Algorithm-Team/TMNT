@@ -41,6 +41,8 @@ static uint32_t comm_last_offline_handle_ms;
 static uint64_t last_navi_time_stamp;
 static uint8_t comm_send_divider;
 
+extern float follow_variable_angular_speed;
+
 static void CommRestartRxInternal(void);
 static void CommHandleOffline(CommInstance_t *comm);
 static void CommFeedWatchdogInternal(void);
@@ -293,8 +295,8 @@ void CommSend(void)
     comm_upload_data.shooter_referee_heat = shoot_cmd_monitor.shooter_referee_heat;
     comm_upload_data.shooter_cooling_limit = shoot_cmd_monitor.shooter_cooling_limit;
     comm_upload_data.cap_voltage = 0.0f;
-    // comm_upload_data.debug_1 = speed_measure.real_wz;
-    // comm_upload_data.debug_2 = big_yaw_motor->measure.vel;
+    comm_upload_data.debug_1 = speed_measure.real_wz;
+    comm_upload_data.debug_2 = follow_variable_angular_speed;
     if (commSendCount >= 3)
         commSendCount = 0;
 

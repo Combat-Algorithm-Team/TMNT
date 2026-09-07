@@ -128,6 +128,8 @@ static PIDInstance Chassis_Acceleration_Z_PID = {
 /* 私有函数计算的中间变量，设为静态以避免参数传递开销 */
 static float chassis_vx, chassis_vy, chassis_vw; // 将云台坐标系速度投影到底盘坐标系
 static ramp_t rotate_ramp;
+float follow_variable_angular_speed;
+static int8_t follow_variable_rotate_direction = 1;
 static float offset_angle;
 static float sin_theta, cos_theta;
 static float chassis_speed_direction;
@@ -824,7 +826,7 @@ static void PowerCalibrationUpdate(void)
 //     }
     cap->tx_data.enable_flag = SUPERCAP_ENABLE;
     cap->tx_data.charge_flag = 1;
-    cap->tx_data.power_limit = referee_info.GameRobotStatus.chassis_power_limit;
+    cap->tx_data.power_limit = chassis_cmd_recv.power_limit;
     if (++supercap_task_div_cnt >= 5) {
         supercap_task_div_cnt = 0;
         SuperCapTask();
@@ -1144,6 +1146,22 @@ void ChassisTask()
     // 获取新的控制信息
 
     SubGetMessage(chassis_sub, &chassis_cmd_recv);
+
+#ifdef CHASSIS_BOARD
+    chassis_cmd_recv.power_limit = 100.0f;
+    /*
+     * 功率限制输入来自裁判系统的 chassis_power_limit：
+     * RobotCMDTask -> chassis_cmd_send.power_limit -> chassis_cmd_recv.power_limit。
+     * 无效限值或急停时不启用功率限流算法，避免初始化阶段将输出限制为零。
+     */
+    if (chassis_cmd_recv.chassis_mode == CHASSIS_ZERO_FORCE || chassis_cmd_recv.power_limit == 0U) {
+        DJIMotorPowerControlEnable(0U);
+    } else {
+        DJIMotorPowerControlSetMaxPower((float)chassis_cmd_recv.power_limit);
+        DJIMotorPowerControlEnable(1U);
+    }
+#endif
+
     ChassisMassIdentificationCommand();
     
 #ifdef CHASSIS_BOARD
@@ -1197,6 +1215,8 @@ void ChassisTask()
             // 当前模式下保留外部 wz 指令（不强制置零）
             //chassis_cmd_recv.wz = 0;
             chassis_vw = 0;
+            follow_variable_angular_speed = 0.0f;
+            follow_variable_rotate_direction = 1;
             ramp_init(&rotate_ramp, 250);
             break;
         case CHASSIS_FOLLOW_GIMBAL_YAW: // 跟随云台
@@ -1206,7 +1226,20 @@ void ChassisTask()
             //  else {
             //      offset_angle = -(chassis_cmd_recv.offset_angle >= 0 ? chassis_cmd_recv.offset_angle - 180 : chassis_cmd_recv.offset_angle + 180);
             //  }
-            chassis_vw = PIDCalculate(&Chassis_Follow_PID, chassis_cmd_recv.align_angle, 0);
+            /* Temporary test: follow mode outputs a triangular-wave gyro speed. */
+            follow_variable_angular_speed +=
+                (float)follow_variable_rotate_direction *
+                CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_ACCELERATION_RAD_S2 * 0.001f;
+            if (follow_variable_angular_speed >= CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MAX_RAD_S) {
+                follow_variable_angular_speed = CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MAX_RAD_S;
+                follow_variable_rotate_direction = -1;
+            } else if (follow_variable_angular_speed <= CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MIN_RAD_S) {
+                follow_variable_angular_speed = CHASSIS_FOLLOW_VARIABLE_ROTATE_ANGULAR_SPEED_MIN_RAD_S;
+                follow_variable_rotate_direction = 1;
+            }
+            chassis_vw = follow_variable_angular_speed;
+            chassis_cmd_recv.vx *= 0.6f;
+            chassis_cmd_recv.vy *= 0.6f;
 
 
             ramp_init(&rotate_ramp, 250);
@@ -1222,6 +1255,8 @@ void ChassisTask()
 
             chassis_vw       = (current_speed_vw + (vw_set - current_speed_vw) * ramp_calc(&rotate_ramp));
             current_speed_vw = chassis_vw;
+            follow_variable_angular_speed = 0.0f;
+            follow_variable_rotate_direction = 1;
             
 
             // chassis_cmd_recv.wz = chassis_vw;
