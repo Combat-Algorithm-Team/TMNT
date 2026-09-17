@@ -58,6 +58,4 @@ eclipse.importer.warning.txt
 .github
 
 # MATLAB identification data
-matlab_data/*.csv
-matlab_data/*.mat
-matlab_data/*.m
+matlab_data/*
