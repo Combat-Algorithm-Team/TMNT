@@ -18,8 +18,8 @@
 
 /* 开发板类型定义，烧录时注意不要弄错对应功能；修改定义后需要重新编译；只能存在一个定义 */
 // #define ONE_BOARD // 单板控制整车
-//#define CHASSIS_BOARD // 底盘板
-#define GIMBAL_BOARD  // 云台板
+#define CHASSIS_BOARD // 底盘板
+//#define GIMBAL_BOARD  // 云台板
 
 //#define VISION_USE_VCP // 使用虚拟串口发送视觉数据
 // #define VISION_USE_UART // 使用串口发送视觉数据
@@ -90,6 +90,9 @@
 /* M3508/C620：19:1 减速箱输出端约 0.3 N*m/A，C620 的 16384 raw 对应 20 A。 */
 #define CHASSIS_WHEEL_TORQUE_NM_PER_RAW      (0.3f * (20.0f / 16384.0f))
 #define CHASSIS_WHEEL_TORQUE_TO_CURRENT      (1.0f / CHASSIS_WHEEL_TORQUE_NM_PER_RAW)
+#define CHASSIS_QCP_FRICTION_COEFFICIENT      1.0f // 轮地摩擦系数
+#define CHASSIS_QCP_TRANSLATIONAL_WEIGHT      1.0f // 平动加速度目标权重
+#define CHASSIS_QCP_ANGULAR_WEIGHT            1.2f // 角加速度目标权重
 #define YAW_K                  0.0004f
 #define PITCH_K                0.000004f
 

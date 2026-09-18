@@ -79,7 +79,7 @@ const osThreadAttr_t Gimbal_attributes = {
 osThreadId_t ChassisHandle;
 const osThreadAttr_t Chassis_attributes = {
   .name = "Chassis",
-  .stack_size = 128 * 4,
+  .stack_size = 1024 * 4,
   .priority = (osPriority_t) osPriorityHigh,
 };
 /* Definitions for Shoot */

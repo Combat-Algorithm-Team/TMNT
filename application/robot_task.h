@@ -25,71 +25,103 @@
 #include "motor_task.h"
 #include "omni_UI.h"
 
+typedef struct
+{
+    volatile float current_ms;
+    volatile float max_ms;
+} RobotTaskTiming_s;
+
+volatile RobotTaskTiming_s robot_task_ins_timing;
+volatile RobotTaskTiming_s robot_task_cmd_timing;
+volatile RobotTaskTiming_s robot_task_chassis_timing;
+volatile RobotTaskTiming_s robot_task_gimbal_timing;
+volatile RobotTaskTiming_s robot_task_shoot_timing;
+volatile RobotTaskTiming_s robot_task_motor_timing;
+volatile RobotTaskTiming_s robot_task_daemon_timing;
+
+static void RobotTaskTimingBegin(uint32_t *cycle_count)
+{
+    (void)DWT_GetDeltaT(cycle_count);
+}
+
+static void RobotTaskTimingEnd(uint32_t *cycle_count, volatile RobotTaskTiming_s *timing)
+{
+    float elapsed_ms = 1000.0f * DWT_GetDeltaT(cycle_count);
+
+    timing->current_ms = elapsed_ms;
+    if (elapsed_ms > timing->max_ms) {
+        timing->max_ms = elapsed_ms;
+    }
+}
+
 //! 任务直接在cubeMX中配置,不再使用这种方式
 __attribute__((noreturn)) void StartINSTASK(void *argument)
 {
     UNUSED(argument);
-    static uint32_t ins_time;
-    static float ins_dt;
+    uint32_t cycle_count = 0U;
     LOGINFO("[freeRTOS] INS Task Start");
     while (1) {
+        RobotTaskTimingBegin(&cycle_count);
         INS_Task();
-        ins_dt = 1000 * DWT_GetDeltaT(&ins_time);
-        if (ins_dt > 1.2f)
-            LOGERROR("[freeRTOS] INS Task is being DELAY! dt = [%f]ms", &ins_dt);
+        RobotTaskTimingEnd(&cycle_count, &robot_task_ins_timing);
         osDelay(1);
     }
 }
 
 __attribute__((noreturn)) void _RobotCMDTask(void *argument)
 {
-    // static uint32_t robot_time;
-    // static float robot_dt;
-    // LOGINFO("[freeRTOS] Robot Task Start");
-    // for (;;) {
-    //     RobotCMDTask();
-    //     robot_dt = 1000 * DWT_GetDeltaT(&robot_time);
-    //     if (robot_dt > 1.2f)
-    //         LOGERROR("[freeRTOS] Robot Task is being DELAY! dt = [%f]ms", &robot_dt);
-    //     osDelay(1);
-    // }
-    static uint32_t cmd_time;
-    static float cmd_dt;
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     LOGINFO("[freeRTOS] RobotCMD Task Start");
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         RobotCMDTask();
-        cmd_dt = 1000 * DWT_GetDeltaT(&cmd_time);
-        if (cmd_dt > 1.2f)
-            LOGERROR("[freeRTOS] Robot Task is being DELAY! dt = [%f]ms", &cmd_dt);
+        RobotTaskTimingEnd(&cycle_count, &robot_task_cmd_timing);
         osDelay(1);
     }
 }
 __attribute__((noreturn)) void _ChassisTask(void *argument)
 {
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         ChassisTask();
+        RobotTaskTimingEnd(&cycle_count, &robot_task_chassis_timing);
         osDelay(1);
     }
 }
 
 __attribute__((noreturn)) void _GimbalTask(void *argument)
 {
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         GimbalTask();
+        RobotTaskTimingEnd(&cycle_count, &robot_task_gimbal_timing);
         osDelay(1);
     }
 }
 __attribute__((noreturn)) void _ShootTask(void *argument)
 {
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         ShootTask();
+        RobotTaskTimingEnd(&cycle_count, &robot_task_shoot_timing);
         osDelay(1);
     }
 }
 __attribute__((noreturn)) void motorControlTask(void *argument)
 {
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         MotorControlTask();
+        RobotTaskTimingEnd(&cycle_count, &robot_task_motor_timing);
         osDelay(1);
     }
 }
@@ -105,8 +137,12 @@ __attribute__((noreturn)) void motorControlTask(void *argument)
 
 __attribute__((noreturn)) void _DaemonTask(void *argument)
 {
+    UNUSED(argument);
+    uint32_t cycle_count = 0U;
     for (;;) {
+        RobotTaskTimingBegin(&cycle_count);
         DaemonTask();
+        RobotTaskTimingEnd(&cycle_count, &robot_task_daemon_timing);
         osDelay(1);
     }
 }

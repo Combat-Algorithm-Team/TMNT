@@ -9,6 +9,7 @@ set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 set(CMAKE_C_COMPILER_FORCED TRUE) # skip compiler test
 set(CMAKE_CXX_COMPILER_FORCED TRUE)
 set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
 set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
 set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
 set(CMAKE_OBJDUMP arm-none-eabi-objdump)
@@ -19,7 +20,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 指定工程名称和语言类型
-project(basic_framework C ASM)
+project(basic_framework C CXX ASM)
 
 # 选择构建类型
 set(CMAKE_BUILD_TYPE Debug) # Debug Release RelWithDebInfo MinSizeRel
@@ -72,8 +73,9 @@ include_sub_directories_recursively(${CMAKE_SOURCE_DIR}/bsp)
 include_sub_directories_recursively(${CMAKE_SOURCE_DIR}/modules)
 include_sub_directories_recursively(${CMAKE_SOURCE_DIR}/application)
 include_sub_directories_recursively(${CMAKE_SOURCE_DIR}/Inc)
+include_directories(${CMAKE_SOURCE_DIR})
 
-# add source, only surfix .c
+# add C/C++ source
 file(GLOB_RECURSE SOURCES
     "Drivers/*.c"
     "Src/*.c"
@@ -81,6 +83,7 @@ file(GLOB_RECURSE SOURCES
     "bsp/*.c"
     "modules/*.c"
     "application/*.c"
+    "application/*.cpp"
 )
 
 # 汇编文件路径

@@ -27,6 +27,7 @@
 #include "user_lib.h"
 #include "comm.h"
 #include "robot_test.h"
+#include "chassis_acceleration_plan.h"
 
 /* 根据 robot_def.h 中的宏自动计算参数 */
 #define PERIMETER_WHEEL  (RADIUS_WHEEL * 2 * PI) // 轮子周长
@@ -467,20 +468,56 @@ static void ChassisOffsetAngleFeedforwardCalc(void)
     sin_theta = arm_sin_f32(offset_angle * DEGREE_2_RAD);
 }
 
-/* 二次约束规划器预留：当前直通，输出未约束车体加速度。 */
+float cal_time_last = 0.0f;
+float cal_time;
+
 /**
- * @brief 计算未约束的车体线加速度和角加速度。
+ * @brief 计算经功率与摩擦约束后的车体线加速度和角加速度。
  * @param ax 输出 X 方向加速度(mm/s^2)。
  * @param ay 输出 Y 方向加速度(mm/s^2)。
  * @param alpha_z 输出 Z 轴角加速度(rad/s^2)。
- * @note 当前为速度差分直通接口，后续二次约束规划器在此处替换。
+ * @note PID 输出及原有控制量保持不变，约束求解在 C++ 单元中完成。
  */
 static void ChassisAccelerationPlan(float *ax, float *ay, float *alpha_z)
 {
-    /* 目标值为期望车体速度，实际值为正运动学测得的底盘速度，PID 输出目标加速度。 */
-    *ax = PIDCalculate(&Chassis_Acceleration_X_PID, speed_measure.real_vx, chassis_vx);
-    *ay = PIDCalculate(&Chassis_Acceleration_Y_PID, speed_measure.real_vy, chassis_vy);
-    *alpha_z = PIDCalculate(&Chassis_Acceleration_Z_PID, speed_measure.real_wz, chassis_vw);
+    cal_time_last = DWT_GetTimeline_ms();
+    ChassisAccelerationPlanInput input = {0};
+    input.x_pid = &Chassis_Acceleration_X_PID;
+    input.y_pid = &Chassis_Acceleration_Y_PID;
+    input.z_pid = &Chassis_Acceleration_Z_PID;
+    input.measured_velocity[0] = speed_measure.real_vx;
+    input.measured_velocity[1] = speed_measure.real_vy;
+    input.measured_velocity[2] = speed_measure.real_wz;
+    input.target_velocity[0] = chassis_vx;
+    input.target_velocity[1] = chassis_vy;
+    input.target_velocity[2] = chassis_vw;
+
+    input.wheel_angle_rad[LF] = wheelset_lf.angle_speed;
+    input.wheel_angle_rad[RF] = wheelset_rf.angle_speed;
+    input.wheel_angle_rad[RB] = wheelset_rb.angle_speed;
+    input.wheel_angle_rad[LB] = wheelset_lb.angle_speed;
+    input.wheel_reverse[LF] = wheelset_lf.reverse_flag;
+    input.wheel_reverse[RF] = wheelset_rf.reverse_flag;
+    input.wheel_reverse[RB] = wheelset_rb.reverse_flag;
+    input.wheel_reverse[LB] = wheelset_lb.reverse_flag;
+
+    input.wheel_speed_rpm[LF] = motor_lf != NULL ? motor_lf->measure.speed_rpm : 0.0f;
+    input.wheel_speed_rpm[RF] = motor_rf != NULL ? motor_rf->measure.speed_rpm : 0.0f;
+    input.wheel_speed_rpm[RB] = motor_rb != NULL ? motor_rb->measure.speed_rpm : 0.0f;
+    input.wheel_speed_rpm[LB] = motor_lb != NULL ? motor_lb->measure.speed_rpm : 0.0f;
+    input.wheel_base_current[LF] =
+        motor_lf != NULL ? motor_lf->power_limit_output - wheel_torque_ff_lf : 0.0f;
+    input.wheel_base_current[RF] =
+        motor_rf != NULL ? motor_rf->power_limit_output - wheel_torque_ff_rf : 0.0f;
+    input.wheel_base_current[RB] =
+        motor_rb != NULL ? motor_rb->power_limit_output - wheel_torque_ff_rb : 0.0f;
+    input.wheel_base_current[LB] =
+        motor_lb != NULL ? motor_lb->power_limit_output - wheel_torque_ff_lb : 0.0f;
+    input.power_limit_w = (float)chassis_cmd_recv.power_limit;
+
+    ChassisAccelerationPlanQcp(&input, ax, ay, alpha_z);
+
+    cal_time = DWT_GetTimeline_ms() - cal_time_last;
 }
 
 float force[4], ux[4], uy[4], moment_arm[4];
@@ -1148,18 +1185,9 @@ void ChassisTask()
     SubGetMessage(chassis_sub, &chassis_cmd_recv);
 
 #ifdef CHASSIS_BOARD
-    chassis_cmd_recv.power_limit = 100.0f;
-    /*
-     * 功率限制输入来自裁判系统的 chassis_power_limit：
-     * RobotCMDTask -> chassis_cmd_send.power_limit -> chassis_cmd_recv.power_limit。
-     * 无效限值或急停时不启用功率限流算法，避免初始化阶段将输出限制为零。
-     */
-    if (chassis_cmd_recv.chassis_mode == CHASSIS_ZERO_FORCE || chassis_cmd_recv.power_limit == 0U) {
-        DJIMotorPowerControlEnable(0U);
-    } else {
-        DJIMotorPowerControlSetMaxPower((float)chassis_cmd_recv.power_limit);
-        DJIMotorPowerControlEnable(1U);
-    }
+    chassis_cmd_recv.power_limit = 10.0f;
+    /* 功率约束已前移至 ChassisAccelerationPlan，关闭电机层二次缩放。 */
+    DJIMotorPowerControlEnable(0U);
 #endif
 
     ChassisMassIdentificationCommand();
@@ -1278,10 +1306,10 @@ void ChassisTask()
     ChassisSpeedInterpolate();
     TerrainSpeedControl();
     FortressAssist();
-    /* 先求未约束车体加速度，再由动力学分配轮端力矩前馈。 */
-    ChassisAccelerationPlan(&chassis_ax, &chassis_ay, &chassis_alpha_z);
     // 根据控制模式进行正运动学解算,计算底盘输出
     SteeringCalculate();
+    /* 根据本周期轮向执行二次约束规划，再由动力学分配轮端力矩前馈。 */
+    ChassisAccelerationPlan(&chassis_ax, &chassis_ay, &chassis_alpha_z);
 #if CHASSIS_YAW_INERTIA_IDENTIFICATION_ENABLE
     ChassisTorqueFeedforwardCalc(0.0f, 0.0f, mass_identification_torque_z);
 #elif CHASSIS_MASS_IDENTIFICATION_ENABLE
