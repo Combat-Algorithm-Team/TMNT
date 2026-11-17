@@ -96,6 +96,7 @@ targets:
         - modules/motor/YSmotor
         - modules/motor/DMmotor
         - application/comm
+        - modules/watttmeter
       libList:
         - modules/algorithm
         - Middlewares/ST/ARM/DSP/Lib

@@ -28,6 +28,7 @@
 #include "comm.h"
 #include "robot_test.h"
 #include "chassis_acceleration_plan.h"
+#include "wattmeter.h"
 
 /* 根据 robot_def.h 中的宏自动计算参数 */
 #define PERIMETER_WHEEL  (RADIUS_WHEEL * 2 * PI) // 轮子周长
@@ -58,6 +59,7 @@ extern comm_cmd_t comm_cmd_data;
 extern comm_upload_t comm_upload_data;
 extern referee_info_t referee_info;           // 裁判系统数据
 SuperCapInstance *cap;                                              // 超级电容
+volatile WattmeterInstance *watt;
 // 驱动与转向电机实例
 DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb; // left right forward back
 DJIMotorInstance *steering_lf, *steering_rf, *steering_rb, *steering_lb;
@@ -426,6 +428,14 @@ void ChassisInit()
             .rx_id      = 0x185, // 超级电容默认发送 ID，注意 tx/rx 对设备视角是相反的
         }};
     cap = SuperCapRegister(&cap_conf); // 超级电容初始化
+
+    Wattmeter_Init_Config_s watt_conf = {
+        .can_config = {
+            .can_handle = &hcan1,
+            .rx_id      = 0x212, // 功率计默认发送 ID，注意 tx/rx 对设备视角是相反的
+        }};
+    watt = WattmeterInit(&watt_conf);
+
     ramp_init(&rotate_ramp, 1000);
 #endif
     // 发布订阅初始化；如果为双板则需要 CAN Comm 传递消息
@@ -1185,7 +1195,7 @@ void ChassisTask()
     SubGetMessage(chassis_sub, &chassis_cmd_recv);
 
 #ifdef CHASSIS_BOARD
-    chassis_cmd_recv.power_limit = 10.0f;
+    chassis_cmd_recv.power_limit = 100.0f;
     /* 功率约束已前移至 ChassisAccelerationPlan，关闭电机层二次缩放。 */
     DJIMotorPowerControlEnable(0U);
 #endif
@@ -1328,8 +1338,6 @@ void ChassisTask()
     // DJIMotorSetRef(steering_lf, 0);
     // 根据裁判系统与电容反馈对输出限幅，并设定闭环参考
     Super_Cap_control();
-
-
 
     // 给电容发送数据
     //SuperCapSend(cap, (uint8_t *)&cap->cap_msg_g);
