@@ -49,13 +49,9 @@
 
 
 #define STEERING_LF_ECD             4683
-#define STEERING_RF_ECD             1325
 #define STEERING_RB_ECD             2700
-#define STEERING_LB_ECD             8169
 #define STEERING_LF_ANGLE           STEERING_LF_ECD * ECD_ANGLE_COEF_DJI
-#define STEERING_RF_ANGLE           STEERING_RF_ECD * ECD_ANGLE_COEF_DJI
 #define STEERING_RB_ANGLE           STEERING_RB_ECD * ECD_ANGLE_COEF_DJI
-#define STEERING_LB_ANGLE           STEERING_LB_ECD * ECD_ANGLE_COEF_DJI
 
 #define PITCH_FEED_TYPE     1// 云台 PITCH 轴反馈值来源：编码器为 0，陀螺仪为 1
 #define PITCH_INS_FEED_TYPE 1

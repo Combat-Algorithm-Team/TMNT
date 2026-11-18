@@ -192,7 +192,7 @@ void NUC_init(void)
 	Navigation_Receive.scanmode = 1;
 }
 
-extern DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb;
+extern DJIMotorInstance *motor_lf, *motor_rb;
 
 
 /**
