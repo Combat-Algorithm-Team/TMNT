@@ -11,11 +11,15 @@ static Publisher_t message_center = {
 
 static void CheckName(char *name)
 {
-    if (strnlen(name, MAX_TOPIC_NAME_LEN + 1) >= MAX_TOPIC_NAME_LEN) {
-        LOGERROR("EVENT NAME TOO LONG:%s", name);
-        while (1)
-            ; // 进入这里说明话题名超出长度限制
+    for (size_t index = 0U; index < MAX_TOPIC_NAME_LEN; ++index) {
+        if (name[index] == '\0') {
+            return;
+        }
     }
+
+    LOGERROR("EVENT NAME TOO LONG:%s", name);
+    while (1)
+        ; // 进入这里说明话题名超出长度限制
 }
 
 static void CheckLen(uint8_t len1, uint8_t len2)

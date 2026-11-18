@@ -91,8 +91,9 @@ static void FireControl()
 	
 }
 
-void USB_Decode(void)
+void USB_Decode(uint16_t len)
 {
+	(void)len;
 	// if(NUC_rx_buff[0]==0xFF&&NUC_rx_buff[31]==0x0D)
 	// {
 	// 	NUC_cmd.delay=1000;

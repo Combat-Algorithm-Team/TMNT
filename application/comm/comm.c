@@ -145,7 +145,7 @@ void CommSend(void)
     comm_cmd_data.revive_suppression = Navigation_Receive.bump_mode;
     memcpy(comm_cmd_data.referee_cmd, &referee_cmd, REFEREE_CMD_SIZE);
     Append_CRC8_Check_Sum((uint8_t *)&comm_cmd_data, COMM_CMD_SIZE);
-    CommSendDMA(&comm_cmd_data, COMM_CMD_SIZE);
+    CommSendDMA((const uint8_t *)&comm_cmd_data, COMM_CMD_SIZE);
 }
 #endif
 
@@ -350,7 +350,7 @@ void CommSend(void)
     commSendCount++;
     if (commSendCount >= 3)
         commSendCount = 0;
-    CommSendDMA(&comm_upload_data, COMM_UPDATA_SIZE);
+    CommSendDMA((const uint8_t *)&comm_upload_data, COMM_UPDATA_SIZE);
 }
 #endif
 

@@ -190,5 +190,5 @@ void NUC_init(void);
 // void daemon_NUC();
 void NUC_offline();
 // void Decision_Tree();
-void USB_Decode(void);
+void USB_Decode(uint16_t len);
 #endif
