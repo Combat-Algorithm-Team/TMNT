@@ -21,7 +21,6 @@
 static INS_Instance *gimbal_IMU_data; // 云台IMU数据
 DJIMotorInstance *yaw_motor;
 DMMotorInstance *pitch_motor, *big_yaw_motor;
-extern DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb;
 extern comm_cmd_t comm_cmd_data;
 extern comm_upload_t comm_upload_data;
 

@@ -2,7 +2,7 @@
 
 #include <math.h>
 
-/* 旧四轮模型沿用转子 RPM 和 C620 电流原始值。 */
+/* 单轮功率模型沿用转子 RPM 和 C620 电流原始值。 */
 static const float speed_loss_coefficient = 4.88405e-07f;
 static const float current_loss_coefficient = 1.749615052e-07f;
 static const float mechanical_power_coefficient = 1.050994734e-7f;

@@ -44,10 +44,10 @@ extern comm_cmd_t comm_cmd_data;
 extern comm_upload_t comm_upload_data;
 extern referee_info_t referee_info;           // 裁判系统数据
 SuperCapInstance *cap;                                              // 超级电容
-// 驱动与转向电机实例
-DJIMotorInstance *motor_lf, *motor_rf, *motor_lb, *motor_rb; // left right forward back
-DJIMotorInstance *steering_lf, *steering_rf, *steering_rb, *steering_lb;
-steering_wheelset_t wheelset_lf, wheelset_rf, wheelset_rb, wheelset_lb;
+// 右前、左后两组舵轮的驱动与转向电机实例
+DJIMotorInstance *motor_rf, *motor_lb;
+DJIMotorInstance *steering_rf, *steering_lb;
+steering_wheelset_t wheelset_rf, wheelset_lb;
 chassis_speed_measure_t speed_measure;
 static float chassis_tilt_deadband_deg = 4.0f;
 static uint8_t last_navi_stamp;
@@ -89,8 +89,8 @@ static volatile float chassis_offset_ff_full_speed  = CHASSIS_HIGH_SPEED * 2.0f;
 static volatile float steering_ff_delay_s           = 0.0f;
 static volatile float steering_ff_limit_deg         = 15.0f;
 static volatile float steering_ff_min_speed         = 100.0f;
-static float steering_lf_angle_ff, steering_rf_angle_ff, steering_rb_angle_ff, steering_lb_angle_ff;
-static float steering_lf_last_angle, steering_rf_last_angle, steering_rb_last_angle, steering_lb_last_angle;
+static float steering_rf_angle_ff, steering_lb_angle_ff;
+static float steering_rf_last_angle, steering_lb_last_angle;
 static uint8_t steering_ff_valid;
 void ChassisInit()
 {
@@ -127,7 +127,7 @@ void ChassisInit()
 
     };
     chassis_IMU_data = INS_Init(BMI088Register(&config)); // IMU先初始化,获取姿态数据指针赋给yaw电机的其他数据来源
-    // 四个轮子的参数一致，只需修改 tx_id 和反转标志位
+    // 两个轮子的参数一致，只需修改 CAN 总线、tx_id 和反转标志位
     Motor_Init_Config_s chassis_motor_config = {
         .controller_param_init_config = {
             .speed_PID = {
@@ -177,16 +177,8 @@ void ChassisInit()
         .motor_type = GM6020
     };
     steering_config.can_init_config.can_handle                              = &hcan2;
-    steering_config.can_init_config.tx_id                                   = 1;
-    steering_lf                                                             = DJIMotorInit(&steering_config);
-
-    steering_config.can_init_config.can_handle                              = &hcan2;
     steering_config.can_init_config.tx_id                                   = 4;
     steering_rf                                                             = DJIMotorInit(&steering_config);
-
-    steering_config.can_init_config.can_handle                              = &hcan1;
-    steering_config.can_init_config.tx_id                                   = 3;
-    steering_rb                                                             = DJIMotorInit(&steering_config);
 
     steering_config.can_init_config.can_handle                              = &hcan1;
     steering_config.can_init_config.tx_id                                   = 2;
@@ -194,19 +186,9 @@ void ChassisInit()
 
     //  @todo: 当前未统一电机正反方向，仍需手动处理 reference 正负号，待电机模块支持后修复
     chassis_motor_config.can_init_config.can_handle                         = &hcan2;
-    chassis_motor_config.can_init_config.tx_id                              = 2;
-    chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
-    motor_lf                                                                = DJIMotorInit(&chassis_motor_config);
-
-    chassis_motor_config.can_init_config.can_handle                         = &hcan2;
     chassis_motor_config.can_init_config.tx_id                              = 3;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
     motor_rf                                                                = DJIMotorInit(&chassis_motor_config);
-
-    chassis_motor_config.can_init_config.can_handle                         = &hcan1;
-    chassis_motor_config.can_init_config.tx_id                              = 2;
-    chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
-    motor_rb                                                                = DJIMotorInit(&chassis_motor_config);
 
     chassis_motor_config.can_init_config.can_handle                         = &hcan1;
     chassis_motor_config.can_init_config.tx_id                              = 1;
@@ -308,9 +290,7 @@ static void ChassisOffsetAngleFeedforwardCalc(void)
 
 static void ChassisSteeringFeedforwardReset(void)
 {
-    steering_lf_angle_ff = 0.0f;
     steering_rf_angle_ff = 0.0f;
-    steering_rb_angle_ff = 0.0f;
     steering_lb_angle_ff = 0.0f;
     steering_ff_valid    = 0;
 }
@@ -332,91 +312,47 @@ static float ChassisSteeringAngleFeedforward(float target_angle, float last_angl
 static void ChassisSteeringFeedforwardCalc(void)
 {
     const float half_side = CHASSIS_R * 0.707f;
-    float lf_vx, rf_vx, rb_vx, lb_vx;
-    float lf_vy, rf_vy, rb_vy, lb_vy;
-    float lf_angle, rf_angle, rb_angle, lb_angle;
-    float lf_speed, rf_speed, rb_speed, lb_speed;
+    float rf_vx, lb_vx;
+    float rf_vy, lb_vy;
+    float rf_angle, lb_angle;
+    float rf_speed, lb_speed;
 
-    lf_vx = chassis_vx + chassis_vw * half_side;
-    lf_vy = chassis_vy - chassis_vw * half_side;
     rf_vx = chassis_vx - chassis_vw * half_side;
     rf_vy = chassis_vy - chassis_vw * half_side;
-    rb_vx = chassis_vx - chassis_vw * half_side;
-    rb_vy = chassis_vy + chassis_vw * half_side;
     lb_vx = chassis_vx + chassis_vw * half_side;
     lb_vy = chassis_vy + chassis_vw * half_side;
 
-    lf_angle = -atan2f(lf_vy, lf_vx);
     rf_angle = -atan2f(rf_vy, rf_vx);
-    rb_angle = -atan2f(rb_vy, rb_vx);
     lb_angle = -atan2f(lb_vy, lb_vx);
 
     if (!ChassisIsRotateMode() || fabsf(steering_ff_delay_s) < 0.000001f) {
-        steering_lf_last_angle = lf_angle;
         steering_rf_last_angle = rf_angle;
-        steering_rb_last_angle = rb_angle;
         steering_lb_last_angle = lb_angle;
         ChassisSteeringFeedforwardReset();
         return;
     }
 
     if (!steering_ff_valid) {
-        steering_lf_last_angle = lf_angle;
         steering_rf_last_angle = rf_angle;
-        steering_rb_last_angle = rb_angle;
         steering_lb_last_angle = lb_angle;
-        steering_lf_angle_ff   = 0.0f;
         steering_rf_angle_ff   = 0.0f;
-        steering_rb_angle_ff   = 0.0f;
         steering_lb_angle_ff   = 0.0f;
         steering_ff_valid      = 1;
         return;
     }
 
-    lf_speed = sqrtf(lf_vx * lf_vx + lf_vy * lf_vy);
     rf_speed = sqrtf(rf_vx * rf_vx + rf_vy * rf_vy);
-    rb_speed = sqrtf(rb_vx * rb_vx + rb_vy * rb_vy);
     lb_speed = sqrtf(lb_vx * lb_vx + lb_vy * lb_vy);
 
-    steering_lf_angle_ff = ChassisSteeringAngleFeedforward(lf_angle, steering_lf_last_angle, lf_speed);
     steering_rf_angle_ff = ChassisSteeringAngleFeedforward(rf_angle, steering_rf_last_angle, rf_speed);
-    steering_rb_angle_ff = ChassisSteeringAngleFeedforward(rb_angle, steering_rb_last_angle, rb_speed);
     steering_lb_angle_ff = ChassisSteeringAngleFeedforward(lb_angle, steering_lb_last_angle, lb_speed);
 
-    steering_lf_last_angle = lf_angle;
     steering_rf_last_angle = rf_angle;
-    steering_rb_last_angle = rb_angle;
     steering_lb_last_angle = lb_angle;
 }
 
 static void SteeringCalculate(void)
 {
-    wheelset_lf.vx = chassis_vx + chassis_vw * 0.707f;
-    wheelset_lf.vy = chassis_vy - chassis_vw * 0.707f;
-    wheelset_lf.angle_measure   = ((float)steering_lf->measure.ecd - STEERING_LF_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_lf.angle_speed     = -atan2f(wheelset_lf.vy, wheelset_lf.vx) + steering_lf_angle_ff;
-    wheelset_lf.rotate_range    = wheelset_lf.angle_speed * RAD_2_DEGREE - wheelset_lf.angle_measure;
-    if (wheelset_lf.rotate_range > 180.0f)
-        wheelset_lf.rotate_range -= 360.0f;
-    if (wheelset_lf.rotate_range < -180.0f)
-        wheelset_lf.rotate_range += 360.0f;
-    wheelset_lf.reverse_flag = 0;
-    if (fabsf(wheelset_lf.rotate_range) > 90.0f) {
-        wheelset_lf.reverse_flag = 1;
-        if (wheelset_lf.rotate_range > 0.0f) {
-            wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range - 180.0f;
-            wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range - 180.0f;
-        } else {
-            wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range + 180.0f;
-            wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_lf.angle_target = wheelset_lf.angle_measure + wheelset_lf.rotate_range;
-        wheelset_lf.angle_ref = steering_lf->measure.total_angle + wheelset_lf.rotate_range;
-    }
-    wheelset_lf.angle_diff      = RAD_2_DEGREE * wheelset_lf.angle_speed - wheelset_lf.angle_measure;
-    wheelset_lf.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_lf.angle_diff) * sqrtf(wheelset_lf.vx * wheelset_lf.vx + wheelset_lf.vy * wheelset_lf.vy);
-    
     wheelset_rf.vx = chassis_vx - chassis_vw * 0.707f;
     wheelset_rf.vy = chassis_vy - chassis_vw * 0.707f;
     wheelset_rf.angle_measure   = ((float)steering_rf->measure.ecd - STEERING_RF_ECD) * ECD_ANGLE_COEF_DJI;
@@ -442,32 +378,6 @@ static void SteeringCalculate(void)
     }
     wheelset_rf.angle_diff      = RAD_2_DEGREE * wheelset_rf.angle_speed - wheelset_rf.angle_measure;
     wheelset_rf.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_rf.angle_diff) * sqrtf(wheelset_rf.vx * wheelset_rf.vx + wheelset_rf.vy * wheelset_rf.vy);
-
-    wheelset_rb.vx = chassis_vx - chassis_vw * 0.707f;
-    wheelset_rb.vy = chassis_vy + chassis_vw * 0.707f;
-    wheelset_rb.angle_measure   = ((float)steering_rb->measure.ecd - STEERING_RB_ECD) * ECD_ANGLE_COEF_DJI;
-    wheelset_rb.angle_speed     = -atan2f(wheelset_rb.vy, wheelset_rb.vx) + steering_rb_angle_ff;
-    wheelset_rb.rotate_range    = wheelset_rb.angle_speed * RAD_2_DEGREE - wheelset_rb.angle_measure;
-    if (wheelset_rb.rotate_range > 180.0f)
-        wheelset_rb.rotate_range -= 360.0f;
-    if (wheelset_rb.rotate_range < -180.0f)
-        wheelset_rb.rotate_range += 360.0f;
-    wheelset_rb.reverse_flag = 0;
-    if (fabsf(wheelset_rb.rotate_range) > 90.0f) {
-        wheelset_rb.reverse_flag = 1;
-        if (wheelset_rb.rotate_range > 0.0f) {
-            wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range - 180.0f;
-            wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range - 180.0f;
-        } else {
-            wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range + 180.0f;
-            wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range + 180.0f;
-        }
-    } else {
-        wheelset_rb.angle_target = wheelset_rb.angle_measure + wheelset_rb.rotate_range;
-        wheelset_rb.angle_ref = steering_rb->measure.total_angle + wheelset_rb.rotate_range;
-    }
-    wheelset_rb.angle_diff      = RAD_2_DEGREE * wheelset_rb.angle_speed - wheelset_rb.angle_measure;
-    wheelset_rb.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_rb.angle_diff) * sqrtf(wheelset_rb.vx * wheelset_rb.vx + wheelset_rb.vy * wheelset_rb.vy);
 
     wheelset_lb.vx = chassis_vx + chassis_vw * 0.707f;
     wheelset_lb.vy = chassis_vy + chassis_vw * 0.707f;
@@ -496,7 +406,7 @@ static void SteeringCalculate(void)
     wheelset_lb.vt              = arm_cos_f32(DEGREE_2_RAD * wheelset_lb.angle_diff) * sqrtf(wheelset_lb.vx * wheelset_lb.vx + wheelset_lb.vy * wheelset_lb.vy);
 }
 
-/** @brief 准备底盘功率上限，供后续四轮限功率使用。 */
+/** @brief 准备底盘功率上限，供后续双轮限功率使用。 */
 static void LimitChassisOutput(void)
 {
     if (comm_cmd_data.terrain_state == TERRAIN_BUMP) {
@@ -558,10 +468,8 @@ static uint8_t supercap_task_div_cnt = 0;
         SuperCapTask();
     }
      // 设定速度参考值
-     DJIMotorSetRef(motor_lf, wheelset_lf.vt);
      DJIMotorSetRef(motor_rf, wheelset_rf.vt);
      DJIMotorSetRef(motor_lb, wheelset_lb.vt);
-     DJIMotorSetRef(motor_rb, wheelset_rb.vt);
  }
 
 
@@ -634,15 +542,14 @@ static void ChassisAccelerationPlan()
 static void ChassisSpeedMeasure()
 {
     const float half_side = CHASSIS_R * 0.70710678f;
-    float lf_speed, rf_speed, rb_speed, lb_speed;
-    float lf_angle, rf_angle, rb_angle, lb_angle;
-    float lf_vx, rf_vx, rb_vx, lb_vx;
-    float lf_vy, rf_vy, rb_vy, lb_vy;
+    float rf_speed, lb_speed;
+    float rf_angle, lb_angle;
+    float rf_vx, lb_vx;
+    float rf_vy, lb_vy;
     float raw_vx, raw_vy, raw_wz;
     float sample_count;
 
-    if (motor_lf == NULL || motor_rf == NULL || motor_rb == NULL || motor_lb == NULL ||
-        steering_lf == NULL || steering_rf == NULL || steering_rb == NULL || steering_lb == NULL) {
+    if (motor_rf == NULL || motor_lb == NULL || steering_rf == NULL || steering_lb == NULL) {
         speed_measure.real_vx = 0.0f;
         speed_measure.real_vy = 0.0f;
         speed_measure.real_wz = 0.0f;
@@ -652,28 +559,23 @@ static void ChassisSpeedMeasure()
         return;
     }
 
-    lf_speed = motor_lf->measure.speed_rpm / REDUCTION_RATIO_WHEEL / 60.0f * PERIMETER_WHEEL;
+    // 保留驱动转速符号，兼容舵角翻转 180 度后驱动电机反转。
     rf_speed = motor_rf->measure.speed_rpm / REDUCTION_RATIO_WHEEL / 60.0f * PERIMETER_WHEEL;
-    rb_speed = motor_rb->measure.speed_rpm / REDUCTION_RATIO_WHEEL / 60.0f * PERIMETER_WHEEL;
     lb_speed = motor_lb->measure.speed_rpm / REDUCTION_RATIO_WHEEL / 60.0f * PERIMETER_WHEEL;
 
-    lf_angle = -((float)steering_lf->measure.ecd - STEERING_LF_ECD) * ECD_ANGLE_COEF_DJI * DEGREE_2_RAD;
     rf_angle = -((float)steering_rf->measure.ecd - STEERING_RF_ECD) * ECD_ANGLE_COEF_DJI * DEGREE_2_RAD;
-    rb_angle = -((float)steering_rb->measure.ecd - STEERING_RB_ECD) * ECD_ANGLE_COEF_DJI * DEGREE_2_RAD;
     lb_angle = -((float)steering_lb->measure.ecd - STEERING_LB_ECD) * ECD_ANGLE_COEF_DJI * DEGREE_2_RAD;
 
-    lf_vx = lf_speed * arm_cos_f32(lf_angle);
     rf_vx = rf_speed * arm_cos_f32(rf_angle);
-    rb_vx = rb_speed * arm_cos_f32(rb_angle);
     lb_vx = lb_speed * arm_cos_f32(lb_angle);
-    lf_vy = lf_speed * arm_sin_f32(lf_angle);
     rf_vy = rf_speed * arm_sin_f32(rf_angle);
-    rb_vy = rb_speed * arm_sin_f32(rb_angle);
     lb_vy = lb_speed * arm_sin_f32(lb_angle);
 
-    raw_vx = (lf_vx + rf_vx + rb_vx + lb_vx) * 0.25f;
-    raw_vy = (lf_vy + rf_vy + rb_vy + lb_vy) * 0.25f;
-    raw_wz = (lf_vx + lb_vx - rf_vx - rb_vx + rb_vy + lb_vy - lf_vy - rf_vy) / (8.0f * half_side);
+    // 右前、左后关于中心对称，平均得到平移速度（mm/s）。
+    raw_vx = (rf_vx + lb_vx) * 0.5f;
+    raw_vy = (rf_vy + lb_vy) * 0.5f;
+    // 与控制解算同号：两轮的 x、y 速度差均为 2 * half_side * wz。
+    raw_wz = (lb_vx - rf_vx + lb_vy - rf_vy) / (4.0f * half_side); // rad/s
 
     speed_measure.vx_sum -= speed_measure.vx_window[speed_measure.window_index];
     speed_measure.vy_sum -= speed_measure.vy_window[speed_measure.window_index];
@@ -912,22 +814,14 @@ void ChassisTask()
     ChassisSpeedMeasure();
     ChassisTiltCalc();
     if (chassis_cmd_recv.chassis_mode == CHASSIS_ZERO_FORCE) { // 如果出现关键模块离线或遥控器急停，则关闭电机输出
-        DJIMotorStop(motor_lf);
         DJIMotorStop(motor_rf);
         DJIMotorStop(motor_lb);
-        DJIMotorStop(motor_rb);
-        DJIMotorStop(steering_lf);
         DJIMotorStop(steering_rf);
-        DJIMotorStop(steering_rb);
         DJIMotorStop(steering_lb);
     } else { // 正常工作
-        DJIMotorEnable(motor_lf);
         DJIMotorEnable(motor_rf);
         DJIMotorEnable(motor_lb);
-        DJIMotorEnable(motor_rb);
-        DJIMotorEnable(steering_lf);
         DJIMotorEnable(steering_rf);
-        DJIMotorEnable(steering_rb);
         DJIMotorEnable(steering_lb);
     }
 
@@ -1006,11 +900,8 @@ void ChassisTask()
     SpeedUnitsConvert();
     // 根据控制模式进行正运动学解算,计算底盘输出
     SteeringCalculate();
-    DJIMotorSetRef(steering_lf, wheelset_lf.angle_ref);
     DJIMotorSetRef(steering_rf, wheelset_rf.angle_ref);
-    DJIMotorSetRef(steering_rb, wheelset_rb.angle_ref);
     DJIMotorSetRef(steering_lb, wheelset_lb.angle_ref);
-    // DJIMotorSetRef(steering_lf, 0);
     // 更新超电并设定轮电机速度参考值
     Super_Cap_control();
 
