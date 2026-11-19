@@ -20,7 +20,7 @@
 
 static INS_Instance *gimbal_IMU_data; // 云台IMU数据
 DJIMotorInstance *yaw_motor;
-DMMotorInstance *pitch_motor, *big_yaw_motor;
+DMMotorInstance *pitch_motor, *big_yaw_motor, *roll_motor;
 extern comm_cmd_t comm_cmd_data;
 extern comm_upload_t comm_upload_data;
 
@@ -192,6 +192,51 @@ void GimbalInit()
         },
     };
     pitch_motor = DMMotorInit(&pitch_motor_config);
+
+    Motor_Init_Config_s roll_motor_config = {//DM4340
+        .can_init_config = {
+            .can_handle = &hcan2,
+            .tx_id = 0x01,
+            .rx_id = 0x11,
+        },
+        .motor_type = DM_Motor,
+        .controller_param_init_config = {
+            .angle_PID = {
+                .Kp = 15,
+                .Ki = 0.0,
+                .Kd = 0.01,
+                .DeadBand = 0,
+                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit,
+                .IntegralLimit = 0.5,
+                .MaxOut = 0,
+            },
+            .speed_PID = {
+                .Kp = 25,
+                .Ki = 0,
+                .Kd = 0.03,
+                .DeadBand = 0,
+                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit,
+                .IntegralLimit = 0.5,
+                .MaxOut = 0,
+            },
+        },
+        .controller_setting_init_config = {
+            .angle_feedback_source = MOTOR_FEED,
+            .speed_feedback_source = MOTOR_FEED,
+            .outer_loop_type       = ANGLE_LOOP,
+            .close_loop_type       = SPEED_LOOP | ANGLE_LOOP,
+            .motor_reverse_flag    = MOTOR_DIRECTION_NORMAL,
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,
+            .feedforward_flag      = FEEDFORWARD_NONE,
+            .mpc_type              = SELF_PID,
+            .control_range = {
+                .P_max = 12.5,
+                .V_max = 10,
+                .T_max = 28,
+            },
+        },
+    };
+    roll_motor = DMMotorInit(&roll_motor_config);
 #endif
 #ifdef CHASSIS_BOARD
     Motor_Init_Config_s big_yaw_motor_config = {//DM6006
@@ -303,6 +348,7 @@ void GimbalTask()
         case GIMBAL_ZERO_FORCE:
             DJIMotorStop(yaw_motor);
             DMMotorStop(pitch_motor);
+            DMMotorStop(roll_motor);
             // DMMotorStop(big_yaw_motor);
             // big_yaw_motor->motor_controller.angle_PID.Iout  = 0;
             yaw_motor->motor_controller.angle_PID.Iout      = 0;
@@ -314,6 +360,7 @@ void GimbalTask()
         case GIMBAL_SEARCH_MODE:
             DJIMotorEnable(yaw_motor);
             DMMotorEnable1(pitch_motor);
+            DMMotorStop(roll_motor);
             DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
             pitch_motor->motor_controller.pid_ref = gimbal_cmd_recv.pitch;
             break;
