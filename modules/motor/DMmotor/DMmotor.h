@@ -81,6 +81,17 @@ typedef struct
 DMMotorInstance *DMMotorInit(Motor_Init_Config_s *config);
 void DMMotorControl();
 void DMMotorSetRef(DMMotorInstance *motor, float ref);
+
+/**
+ * @brief 切换DM电机角度环或速度环的反馈来源
+ *
+ * @param motor 要切换反馈数据来源的电机
+ * @param loop 要切换的控制闭环,仅支持ANGLE_LOOP或SPEED_LOOP
+ * @param type 目标反馈来源,MOTOR_FEED或OTHER_FEED
+ * @note 使用OTHER_FEED前,需在初始化时设置对应的外部反馈数据指针
+ */
+void DMMotorChangeFeed(DMMotorInstance *motor, Closeloop_Type_e loop, Feedback_Source_e type);
+
 void DMMotorEnableMode(DMMotorInstance *motor);
 void DMMotorSetTorque(DMMotorInstance *motor, float torque); // 设置力矩
 void DMMotorStop(DMMotorInstance *motor);

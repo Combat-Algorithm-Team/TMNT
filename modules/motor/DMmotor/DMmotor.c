@@ -202,6 +202,17 @@ void DMMotorSetRef(DMMotorInstance *motor, float ref)
 {
     motor->motor_controller.pid_ref = ref;
 }
+
+void DMMotorChangeFeed(DMMotorInstance *motor, Closeloop_Type_e loop, Feedback_Source_e type)
+{
+    if (loop == ANGLE_LOOP)
+        motor->motor_settings.angle_feedback_source = type;
+    else if (loop == SPEED_LOOP)
+        motor->motor_settings.speed_feedback_source = type;
+    else
+        LOGERROR("[DMMotor] loop type error, check memory access and func param");
+}
+
 void DMMotorControl()
 {
     float pid_measure, pid_ref;

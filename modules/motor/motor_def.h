@@ -160,4 +160,12 @@ typedef struct
     Motor_Control_Type_e motor_contro_type;  //控制类型
 } Motor_Init_Config_s;
 
+typedef struct
+{
+    // PID_Init_Config_s current_PID;
+    PID_Init_Config_s speed_PID;
+    PID_Init_Config_s angle_PID;
+    // PID_Init_Config_s mpc_speed_PID;
+} Motor_PID_Para_s;
+
 #endif // !MOTOR_DEF_H

@@ -154,6 +154,7 @@ typedef enum {
     CHASSIS_NO_FOLLOW,         // 不跟随，允许全向平移
     CHASSIS_FOLLOW_GIMBAL_YAW, // 跟随模式，底盘叠加角度环控制
     CHASSIS_REVERSE_ROTATE,    // 反方向小陀螺
+    CHASSIS_HOLE,
 } chassis_mode_e;
 
 // 云台模式设置
@@ -161,6 +162,7 @@ typedef enum {
     GIMBAL_ZERO_FORCE = 0, // 电流零输出
     GIMBAL_GYRO_MODE,      // 云台陀螺仪反馈模式,反馈值为陀螺仪pitch,total_yaw_angle,底盘可以为小陀螺和跟随模式
     GIMBAL_SEARCH_MODE,
+    GIMBAL_HOLE,
 } gimbal_mode_e;
 typedef enum {
     NUC_NORMAL = 0,

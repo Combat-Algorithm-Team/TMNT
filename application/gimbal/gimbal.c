@@ -38,6 +38,48 @@ volatile static float yaw_tor_k = 60.0f;
 extern  NUC_cmd_t NUC_cmd;
 extern chassis_speed_measure_t speed_measure;
 
+Motor_PID_Para_s yaw_PID_para[2] =
+{
+    {//0:MOTOR_FEED
+        .angle_PID = {
+            .Kp             = 2,//12, // 0.24, // 0.31, // 0.45
+            .Ki             = 0.0f,
+            .Kd             = 0,//0.02,//0.01,
+            .DeadBand       = 0.0f,
+            .Improve        = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement,
+            .IntegralLimit  = 20, 
+            .MaxOut         = 0,
+        },
+        .speed_PID = {
+            .Kp            = 2000,//6000,//10000, //11000,
+            .Ki            = 0,    // 0
+            .Kd            = 0,//5, // 30
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement | PID_OutputFilter,
+            .IntegralLimit = 3000,
+            .MaxOut        = 0, // 20000
+        }
+    },
+    {//1:OTHER_FEED
+        .angle_PID = {
+            .Kp             = 2,//12, // 0.24, // 0.31, // 0.45
+            .Ki             = 0.0f,
+            .Kd             = 0,//0.02,//0.01,
+            .DeadBand       = 0.0f,
+            .Improve        = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement,
+            .IntegralLimit  = 20, 
+            .MaxOut         = 1000,
+        },
+        .speed_PID = {
+            .Kp            = 2000,//6000,//10000, //11000,
+            .Ki            = 0,    // 0
+            .Kd            = 0,//5, // 30
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement | PID_OutputFilter,
+            .IntegralLimit = 3000,
+            .MaxOut        = 10000, // 20000
+        }
+    }
+};
+
 #ifdef CHASSIS_BOARD
 static uint8_t SearchMotorIsOnline(const DMMotorInstance *motor)
 {
@@ -94,23 +136,8 @@ void GimbalInit()
             .tx_id      = 1,
         },
         .controller_param_init_config = {
-            .angle_PID = {
-                .Kp            = 2,//12, // 0.24, // 0.31, // 0.45
-                .Ki            = 0.0f,
-                .Kd            = 0,//0.02,//0.01,
-                .DeadBand      = 0.0f,
-                .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement,
-                .IntegralLimit = 20, 
-                .MaxOut = 1000,
-            },
-            .speed_PID = {
-                .Kp            = 2000,//6000,//10000, //11000,
-                .Ki            = 0,    // 0
-                .Kd            = 0,//5, // 30
-                .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement | PID_OutputFilter,
-                .IntegralLimit = 3000,
-                .MaxOut        = 10000, // 20000
-            },
+            .angle_PID = yaw_PID_para[OTHER_FEED].angle_PID,
+            .speed_PID = yaw_PID_para[OTHER_FEED].speed_PID,
             .mpc_speed_PID = {
                 .Kp            = 5000,
                 .Ki            = 0,
@@ -294,18 +321,33 @@ int32_t big_yaw_fetch_angle_single;
 // base_yaw_tilt_s base_yaw_tilt;
 uint8_t last_NUC_detect = 0;
 gimbal_mode_e last_gimbal_mode = GIMBAL_ZERO_FORCE;
-// base_yaw_tilt_s* GetBaseYawTilt(void)
-// {
-//     static float gimbal_yaw_pitch,gimbal_yaw_roll;
-//     static float gimbal_yaw_tilt_direction, gimbal_yaw_tilt_alpha;
-//     gimbal_yaw_pitch            =  - gimbal_IMU_data->output.INS_angle[INS_PITCH_ADDRESS_OFFSET] - (pitch_motor->measure.pos - PITCH_HORIZON_POS);
-//     gimbal_yaw_roll             = gimbal_IMU_data->output.INS_angle[INS_ROLL_ADDRESS_OFFSET];
-//     gimbal_yaw_tilt_direction   = atan2f(arm_sin_f32(gimbal_yaw_roll)*arm_cos_f32(gimbal_yaw_pitch), -arm_sin_f32(gimbal_yaw_pitch));
-//     gimbal_yaw_tilt_alpha       = atan2f(sqrtf(arm_sin_f32(gimbal_yaw_pitch)*arm_sin_f32(gimbal_yaw_pitch) + arm_sin_f32(gimbal_yaw_roll)*arm_sin_f32(gimbal_yaw_roll)*arm_cos_f32(gimbal_yaw_pitch)*arm_cos_f32(gimbal_yaw_pitch)), arm_cos_f32(gimbal_yaw_roll)*arm_cos_f32(gimbal_yaw_pitch));
-//     base_yaw_tilt.direction     = RAD_2_DEGREE * (gimbal_yaw_tilt_direction - (float)(yaw_motor->measure.ecd - YAW_BIG_YAW_ALIGN_ECD) * 2 * PI / 8192);
-//     base_yaw_tilt.alpha         = gimbal_yaw_tilt_alpha;
-//     return &base_yaw_tilt;
-// }
+
+#ifdef GIMBAL_BOARD
+static void Iout_reset()
+{
+    yaw_motor->motor_controller.angle_PID.Iout      = 0;
+    yaw_motor->motor_controller.speed_PID.Iout      = 0;
+    pitch_motor->motor_controller.angle_PID.Iout    = 0;
+    pitch_motor->motor_controller.speed_PID.Iout    = 0;
+    roll_motor->motor_controller.angle_PID.Iout     = 0;
+    roll_motor->motor_controller.speed_PID.Iout     = 0;
+}
+
+static void PID_para_set(Feedback_Source_e feed_type)
+{
+    switch(feed_type)
+    {
+        case MOTOR_FEED:
+
+            break;
+        case OTHER_FEED:
+
+            break;
+        default:
+            break;
+    }
+}
+#endif
 
 /* 机器人云台控制核心任务,后续考虑只保留IMU控制,不再需要电机的反馈 */
 void GimbalTask()
@@ -358,11 +400,46 @@ void GimbalTask()
         //使用陀螺仪的反馈,底盘根据yaw电机的offset跟随云台或视觉模式采用
         case GIMBAL_GYRO_MODE:
         case GIMBAL_SEARCH_MODE:
+            if(last_gimbal_mode != gimbal_cmd_recv.gimbal_mode)
+            {
+                Iout_reset();
+                PID_para_set(OTHER_FEED);
+            }
             DJIMotorEnable(yaw_motor);
-            DMMotorEnable1(pitch_motor);
-            DMMotorStop(roll_motor);
+            DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
+            DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
             DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
-            pitch_motor->motor_controller.pid_ref = gimbal_cmd_recv.pitch;
+
+            DMMotorEnable1(pitch_motor);
+            DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
+            DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
+            DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
+
+            DMMotorStop(roll_motor);
+            DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
+            DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
+            DMMotorSetRef(roll_motor, 0);
+            break;
+        case GIMBAL_HOLE:
+            if(last_gimbal_mode != GIMBAL_HOLE)
+            {
+                Iout_reset();
+                PID_para_set(MOTOR_FEED);
+            }
+            DJIMotorEnable(yaw_motor);
+            DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, MOTOR_FEED);
+            DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, MOTOR_FEED);
+            DJIMotorSetRef(yaw_motor, YAW_BIG_YAW_ALIGN_ECD * ECD_ANGLE_COEF_DJI);
+            
+            DMMotorEnable1(pitch_motor);
+            DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, MOTOR_FEED);
+            DMMotorChangeFeed(pitch_motor, SPEED_LOOP, MOTOR_FEED);
+            DMMotorSetRef(pitch_motor, PITCH_HORIZON_POS);
+
+            DMMotorStop(roll_motor);
+            DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
+            DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
+            DMMotorSetRef(roll_motor, 0);
             break;
         default:
             break;
