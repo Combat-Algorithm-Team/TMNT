@@ -10,7 +10,7 @@
 #define RC_RESTART_INTERVAL_COUNT 100 // DaemonTask 1kHz, 100 count = 10Hz restart
 
 // 遥控器数据
-static RC_ctrl_t rc_ctrl[2];     //[0]:当前数据TEMP,[1]:上一次的数据LAST.用于按键持续按下和切换的判断
+// static RC_ctrl_t rc_ctrl[2];     //[0]:当前数据TEMP,[1]:上一次的数据LAST.用于按键持续按下和切换的判断
 volatile static WFLY_ctrl_t WFLY_ctrl[2];
 volatile static int16_t WFLY_raw[16];
 static uint8_t rc_init_flag = 0; // 遥控器初始化标志位
@@ -44,13 +44,29 @@ static void WFLY_mapping()
     WFLY_ctrl[TEMP].switch_SB = WFLY_raw[5];
     WFLY_ctrl[TEMP].switch_SC = WFLY_raw[6];
     WFLY_ctrl[TEMP].switch_SD = WFLY_raw[7];
+    WFLY_ctrl[TEMP].switch_SE = WFLY_raw[8];
+    WFLY_ctrl[TEMP].switch_SF = WFLY_raw[9];
+    WFLY_ctrl[TEMP].switch_SG = WFLY_raw[10];
+    WFLY_ctrl[TEMP].switch_SH = WFLY_raw[11];
+    WFLY_ctrl[TEMP].dial_lf = WFLY_raw[12];
+    WFLY_ctrl[TEMP].dial_rf = WFLY_raw[13];
+    WFLY_ctrl[TEMP].dial_lb = WFLY_raw[14];
+    WFLY_ctrl[TEMP].dial_rb = WFLY_raw[15];
 
-    WFLY_ctrl[TEMP].state_SA = WFLY_ctrl[TEMP].switch_SA >= 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SA == 0) WFLY_ctrl[TEMP].state_SA = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SA = WFLY_ctrl[TEMP].switch_SA > 0 ? SWITCH_DOWN : SWITCH_UP;
     if(WFLY_ctrl[TEMP].switch_SB == 0) WFLY_ctrl[TEMP].state_SB = SWITCH_MIDDLE;
     else WFLY_ctrl[TEMP].state_SB = WFLY_ctrl[TEMP].switch_SB > 0 ? SWITCH_DOWN : SWITCH_UP;
     if(WFLY_ctrl[TEMP].switch_SC == 0) WFLY_ctrl[TEMP].state_SC = SWITCH_MIDDLE;
     else WFLY_ctrl[TEMP].state_SC = WFLY_ctrl[TEMP].switch_SC > 0 ? SWITCH_DOWN : SWITCH_UP;
-    WFLY_ctrl[TEMP].state_SD = WFLY_ctrl[TEMP].switch_SD >= 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SD == 0) WFLY_ctrl[TEMP].state_SD = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SD = WFLY_ctrl[TEMP].switch_SD > 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SE == 0) WFLY_ctrl[TEMP].state_SE = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SE = WFLY_ctrl[TEMP].switch_SE > 0 ? SWITCH_DOWN : SWITCH_UP;
+    WFLY_ctrl[TEMP].state_SF = WFLY_ctrl[TEMP].switch_SF >= 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SG == 0) WFLY_ctrl[TEMP].state_SG = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SG = WFLY_ctrl[TEMP].switch_SG > 0 ? SWITCH_DOWN : SWITCH_UP;
+    WFLY_ctrl[TEMP].state_SH = WFLY_ctrl[TEMP].switch_SH >= 0 ? SWITCH_DOWN : SWITCH_UP;
 }
 /**
  * @brief 解包16通道SBUS数据并减去偏置

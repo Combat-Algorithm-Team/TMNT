@@ -29,7 +29,7 @@
 
 // 检查接收值是否出错
 #define RC_CH_VALUE_MIN ((uint16_t)364)
-#define RC_CH_VALUE_OFFSET ((uint16_t)1024)
+#define RC_CH_VALUE_OFFSET ((uint16_t)992)
 #define RC_CH_VALUE_MAX ((uint16_t)1684)
 
 /* ----------------------- RC Switch Definition----------------------------- */
@@ -130,10 +130,23 @@ typedef struct
     int16_t switch_SB;  //CH6
     int16_t switch_SC;  //CH7
     int16_t switch_SD;  //CH8
+    int16_t switch_SE;  //CH9
+    int16_t switch_SF;  //CH10
+    int16_t switch_SG;  //CH11
+    int16_t switch_SH;  //CH12
+    int16_t dial_lf;    //CH13
+    int16_t dial_rf;    //CH14
+    int16_t dial_lb;    //CH15
+    int16_t dial_rb;    //CH16
+
     switch_state_e state_SA;
     switch_state_e state_SB;
     switch_state_e state_SC;
     switch_state_e state_SD;
+    switch_state_e state_SE;
+    switch_state_e state_SF;
+    switch_state_e state_SG;
+    switch_state_e state_SH;
     // uint8_t ori[10];
 } WFLY_ctrl_t;
 

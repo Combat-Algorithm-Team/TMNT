@@ -381,6 +381,8 @@ extern INS_Instance *INS;
 int16_t yaw_test_count = 1000, yaw_test_state = 1, yaw_test_range = 10;
 int16_t pitch_test_count = 1000,pitch_test_state = 1;
 float pitch_test_range = 0.05;
+uint16_t Gyro2HoleFlag = 0;
+uint16_t Hole2GyroFlag = 0;
 /**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
@@ -398,14 +400,7 @@ static void RemoteControlSet()
     //     SuperCap_flag_from_user = SUPER_USER_CLOSE; // 默认关闭超电
     // }
 
-    // 使用相对角度控制
-    //memcpy(&rec_yaw, vision_recv_data, sizeof(float));
-    //memcpy(&rec_pitch, vision_recv_data + 4, sizeof(float));
-
-    
-
     //修改部分
-    // if(rc_data[TEMP].rc.switch_left == RC_SW_DOWN&&rc_data[TEMP].rc.switch_right == RC_SW_MID) chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
     if(WFLY_data[TEMP].state_SB == SWITCH_DOWN && WFLY_data[TEMP].state_SC == SWITCH_DOWN && WFLY_data[TEMP].state_SD == SWITCH_UP)
     {    
         // NUC_cmd.delay--;
