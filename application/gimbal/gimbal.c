@@ -80,6 +80,94 @@ Motor_PID_Para_s yaw_PID_para[2] =
     }
 };
 
+Motor_PID_Para_s pitch_PID_para[2] =
+{
+    {//0:MOTOR_FEED
+        .angle_PID = {
+            .Kp            = 50,
+            .Ki            = 100,
+            .Kd            = 0.0,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 3,
+            .MaxOut        = 0,
+        },
+        .speed_PID = {
+            .Kp            = 1,
+            .Ki            = 0.8,
+            .Kd            = 0.001,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 1,
+            .MaxOut        = 0,
+        }
+    },
+    {//1:OTHER_FEED
+        .angle_PID = {
+            .Kp            = 50,
+            .Ki            = 100,
+            .Kd            = 0.0,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 3,
+            .MaxOut        = 30,
+        },
+        .speed_PID = {
+            .Kp            = 1,
+            .Ki            = 0.8,
+            .Kd            = 0.001,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 1,
+            .MaxOut        = 4,
+        }
+    }
+};
+
+Motor_PID_Para_s roll_PID_para[2] =
+{
+    {//0:MOTOR_FEED
+        .angle_PID = {
+            .Kp            = 15,
+            .Ki            = 0.0,
+            .Kd            = 0.01,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 0.5,
+            .MaxOut        = 0,
+        },
+        .speed_PID = {
+            .Kp            = 25,
+            .Ki            = 0,
+            .Kd            = 0.03,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 0.5,
+            .MaxOut        = 0,
+        }
+    },
+    {//1:OTHER_FEED
+        .angle_PID = {
+            .Kp            = 15,
+            .Ki            = 0.0,
+            .Kd            = 0.01,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 0.5,
+            .MaxOut        = 0,
+        },
+        .speed_PID = {
+            .Kp            = 25,
+            .Ki            = 0,
+            .Kd            = 0.03,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 0.5,
+            .MaxOut        = 0,
+        }
+    }
+};
+
 #ifdef CHASSIS_BOARD
 static uint8_t SearchMotorIsOnline(const DMMotorInstance *motor)
 {
@@ -170,24 +258,8 @@ void GimbalInit()
         },
         .motor_type = DM_Motor,
         .controller_param_init_config ={
-            .angle_PID = {
-                .Kp = 50,
-                .Ki = 100,
-                .Kd = 0.0,
-                .DeadBand = 0,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit ,
-                .IntegralLimit = 3,
-                .MaxOut = 30,
-            },
-            .speed_PID = {
-                .Kp = 1,
-                .Ki = 0.8,
-                .Kd = 0.001,
-                .DeadBand = 0,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit ,
-                .IntegralLimit = 1,
-                .MaxOut = 4,
-            },
+            .angle_PID = pitch_PID_para[OTHER_FEED].angle_PID,
+            .speed_PID = pitch_PID_para[OTHER_FEED].speed_PID,
             .mpc_speed_PID = {
                 .Kp = 0.0f,
                 .Ki = 0,
@@ -228,24 +300,8 @@ void GimbalInit()
         },
         .motor_type = DM_Motor,
         .controller_param_init_config = {
-            .angle_PID = {
-                .Kp = 15,
-                .Ki = 0.0,
-                .Kd = 0.01,
-                .DeadBand = 0,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit,
-                .IntegralLimit = 0.5,
-                .MaxOut = 0,
-            },
-            .speed_PID = {
-                .Kp = 25,
-                .Ki = 0,
-                .Kd = 0.03,
-                .DeadBand = 0,
-                .Improve = PID_Trapezoid_Intergral | PID_Integral_Limit,
-                .IntegralLimit = 0.5,
-                .MaxOut = 0,
-            },
+            .angle_PID = roll_PID_para[MOTOR_FEED].angle_PID,
+            .speed_PID = roll_PID_para[MOTOR_FEED].speed_PID,
         },
         .controller_setting_init_config = {
             .angle_feedback_source = MOTOR_FEED,
@@ -335,17 +391,53 @@ static void Iout_reset()
 
 static void PID_para_set(Feedback_Source_e feed_type)
 {
-    switch(feed_type)
-    {
-        case MOTOR_FEED:
+    yaw_motor->motor_controller.angle_PID.Kp            = yaw_PID_para[feed_type].angle_PID.Kp;
+    yaw_motor->motor_controller.angle_PID.Ki            = yaw_PID_para[feed_type].angle_PID.Ki;
+    yaw_motor->motor_controller.angle_PID.Kd            = yaw_PID_para[feed_type].angle_PID.Kd;
+    yaw_motor->motor_controller.angle_PID.MaxOut        = yaw_PID_para[feed_type].angle_PID.MaxOut;
+    yaw_motor->motor_controller.angle_PID.DeadBand      = yaw_PID_para[feed_type].angle_PID.DeadBand;
+    yaw_motor->motor_controller.angle_PID.Improve       = yaw_PID_para[feed_type].angle_PID.Improve;
+    yaw_motor->motor_controller.angle_PID.IntegralLimit = yaw_PID_para[feed_type].angle_PID.IntegralLimit;
 
-            break;
-        case OTHER_FEED:
+    yaw_motor->motor_controller.speed_PID.Kp            = yaw_PID_para[feed_type].speed_PID.Kp;
+    yaw_motor->motor_controller.speed_PID.Ki            = yaw_PID_para[feed_type].speed_PID.Ki;
+    yaw_motor->motor_controller.speed_PID.Kd            = yaw_PID_para[feed_type].speed_PID.Kd;
+    yaw_motor->motor_controller.speed_PID.MaxOut        = yaw_PID_para[feed_type].speed_PID.MaxOut;
+    yaw_motor->motor_controller.speed_PID.DeadBand      = yaw_PID_para[feed_type].speed_PID.DeadBand;
+    yaw_motor->motor_controller.speed_PID.Improve       = yaw_PID_para[feed_type].speed_PID.Improve;
+    yaw_motor->motor_controller.speed_PID.IntegralLimit = yaw_PID_para[feed_type].speed_PID.IntegralLimit;
 
-            break;
-        default:
-            break;
-    }
+    pitch_motor->motor_controller.angle_PID.Kp            = pitch_PID_para[feed_type].angle_PID.Kp;
+    pitch_motor->motor_controller.angle_PID.Ki            = pitch_PID_para[feed_type].angle_PID.Ki;
+    pitch_motor->motor_controller.angle_PID.Kd            = pitch_PID_para[feed_type].angle_PID.Kd;
+    pitch_motor->motor_controller.angle_PID.MaxOut        = pitch_PID_para[feed_type].angle_PID.MaxOut;
+    pitch_motor->motor_controller.angle_PID.DeadBand      = pitch_PID_para[feed_type].angle_PID.DeadBand;
+    pitch_motor->motor_controller.angle_PID.Improve       = pitch_PID_para[feed_type].angle_PID.Improve;
+    pitch_motor->motor_controller.angle_PID.IntegralLimit = pitch_PID_para[feed_type].angle_PID.IntegralLimit;
+
+    pitch_motor->motor_controller.speed_PID.Kp            = pitch_PID_para[feed_type].speed_PID.Kp;
+    pitch_motor->motor_controller.speed_PID.Ki            = pitch_PID_para[feed_type].speed_PID.Ki;
+    pitch_motor->motor_controller.speed_PID.Kd            = pitch_PID_para[feed_type].speed_PID.Kd;
+    pitch_motor->motor_controller.speed_PID.MaxOut        = pitch_PID_para[feed_type].speed_PID.MaxOut;
+    pitch_motor->motor_controller.speed_PID.DeadBand      = pitch_PID_para[feed_type].speed_PID.DeadBand;
+    pitch_motor->motor_controller.speed_PID.Improve       = pitch_PID_para[feed_type].speed_PID.Improve;
+    pitch_motor->motor_controller.speed_PID.IntegralLimit = pitch_PID_para[feed_type].speed_PID.IntegralLimit;
+
+    roll_motor->motor_controller.angle_PID.Kp            = roll_PID_para[MOTOR_FEED].angle_PID.Kp;
+    roll_motor->motor_controller.angle_PID.Ki            = roll_PID_para[MOTOR_FEED].angle_PID.Ki;
+    roll_motor->motor_controller.angle_PID.Kd            = roll_PID_para[MOTOR_FEED].angle_PID.Kd;
+    roll_motor->motor_controller.angle_PID.MaxOut        = roll_PID_para[MOTOR_FEED].angle_PID.MaxOut;
+    roll_motor->motor_controller.angle_PID.DeadBand      = roll_PID_para[MOTOR_FEED].angle_PID.DeadBand;
+    roll_motor->motor_controller.angle_PID.Improve       = roll_PID_para[MOTOR_FEED].angle_PID.Improve;
+    roll_motor->motor_controller.angle_PID.IntegralLimit = roll_PID_para[MOTOR_FEED].angle_PID.IntegralLimit;
+
+    roll_motor->motor_controller.speed_PID.Kp            = roll_PID_para[MOTOR_FEED].speed_PID.Kp;
+    roll_motor->motor_controller.speed_PID.Ki            = roll_PID_para[MOTOR_FEED].speed_PID.Ki;
+    roll_motor->motor_controller.speed_PID.Kd            = roll_PID_para[MOTOR_FEED].speed_PID.Kd;
+    roll_motor->motor_controller.speed_PID.MaxOut        = roll_PID_para[MOTOR_FEED].speed_PID.MaxOut;
+    roll_motor->motor_controller.speed_PID.DeadBand      = roll_PID_para[MOTOR_FEED].speed_PID.DeadBand;
+    roll_motor->motor_controller.speed_PID.Improve       = roll_PID_para[MOTOR_FEED].speed_PID.Improve;
+    roll_motor->motor_controller.speed_PID.IntegralLimit = roll_PID_para[MOTOR_FEED].speed_PID.IntegralLimit;
 }
 #endif
 
@@ -391,8 +483,6 @@ void GimbalTask()
             DJIMotorStop(yaw_motor);
             DMMotorStop(pitch_motor);
             DMMotorStop(roll_motor);
-            // DMMotorStop(big_yaw_motor);
-            // big_yaw_motor->motor_controller.angle_PID.Iout  = 0;
             yaw_motor->motor_controller.angle_PID.Iout      = 0;
             pitch_motor->motor_controller.angle_PID.Iout    = 0;
             pitch_motor->motor_controller.speed_PID.Iout    = 0;
