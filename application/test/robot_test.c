@@ -192,9 +192,6 @@ void NUC_init(void)
 	Navigation_Receive.scanmode = 1;
 }
 
-extern DJIMotorInstance *motor_lf, *motor_rb;
-
-
 /**
  *@Function:	NUC_Send_Data()
  *@Description:	NUC数据发送

@@ -12,6 +12,7 @@
 // 遥控器数据
 static RC_ctrl_t rc_ctrl[2];     //[0]:当前数据TEMP,[1]:上一次的数据LAST.用于按键持续按下和切换的判断
 volatile static WFLY_ctrl_t WFLY_ctrl[2];
+volatile static int16_t WFLY_raw[16];
 static uint8_t rc_init_flag = 0; // 遥控器初始化标志位
 
 // 遥控器拥有的串口实例,因为遥控器是单例,所以这里只有一个,就不封装了
@@ -28,13 +29,36 @@ DaemonInstance *rc_daemon_instance;
 //         if (abs(*(&rc_ctrl[TEMP].rc.rocker_l_ + i)) > 660)
 //             *(&rc_ctrl[TEMP].rc.rocker_l_ + i) = 0;
 // }
-
 /**
- * @brief 遥控器数据解析
+ * @brief 将减去偏置的通道值映射为遥控器控制数据和开关状态
+ */
+static void WFLY_mapping()
+{
+    memcpy(&WFLY_ctrl[LAST], &WFLY_ctrl[TEMP], sizeof(WFLY_ctrl_t));
+
+    WFLY_ctrl[TEMP].rocker_r_ = WFLY_raw[0];
+    WFLY_ctrl[TEMP].rocker_r1 = WFLY_raw[1];
+    WFLY_ctrl[TEMP].rocker_l1 = WFLY_raw[2];
+    WFLY_ctrl[TEMP].rocker_l_ = WFLY_raw[3];
+    WFLY_ctrl[TEMP].switch_SA = WFLY_raw[4];
+    WFLY_ctrl[TEMP].switch_SB = WFLY_raw[5];
+    WFLY_ctrl[TEMP].switch_SC = WFLY_raw[6];
+    WFLY_ctrl[TEMP].switch_SD = WFLY_raw[7];
+
+    WFLY_ctrl[TEMP].state_SA = WFLY_ctrl[TEMP].switch_SA >= 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SB == 0) WFLY_ctrl[TEMP].state_SB = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SB = WFLY_ctrl[TEMP].switch_SB > 0 ? SWITCH_DOWN : SWITCH_UP;
+    if(WFLY_ctrl[TEMP].switch_SC == 0) WFLY_ctrl[TEMP].state_SC = SWITCH_MIDDLE;
+    else WFLY_ctrl[TEMP].state_SC = WFLY_ctrl[TEMP].switch_SC > 0 ? SWITCH_DOWN : SWITCH_UP;
+    WFLY_ctrl[TEMP].state_SD = WFLY_ctrl[TEMP].switch_SD >= 0 ? SWITCH_DOWN : SWITCH_UP;
+}
+/**
+ * @brief 解包16通道SBUS数据并减去偏置
  *
  * @param sbus_buf 接收buffer
+ * @return 1:转换成功,0:帧头错误
  */
-static void sbus_to_rc(const uint8_t *sbus_buf)
+static uint8_t sbus_to_rc(const uint8_t *sbus_buf)
 {
     // 摇杆,直接解算时减去偏置
     // rc_ctrl[TEMP].rc.rocker_r_ = ((sbus_buf[0] | (sbus_buf[1] << 8)) & 0x07ff) - RC_CH_VALUE_OFFSET;                              //!< Channel 0
@@ -87,26 +111,26 @@ static void sbus_to_rc(const uint8_t *sbus_buf)
     // }
     if(sbus_buf[0] == 0x0F)
     {
-        memcpy(&WFLY_ctrl[LAST], &WFLY_ctrl[TEMP], sizeof(WFLY_ctrl_t));
-
-        WFLY_ctrl[TEMP].rocker_r_ = (int16_t)((sbus_buf[1] & 0xFF)       |((sbus_buf[2] & 0x07) << 8)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].rocker_r1 = (int16_t)(((sbus_buf[2] >> 3) & 0x1F)|((sbus_buf[3] & 0x3F) << 5)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].rocker_l1 = (int16_t)(((sbus_buf[3] >> 6) & 0x03)|((sbus_buf[4] & 0xFF) << 2)    |((sbus_buf[5] & 0x01) << 10)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].rocker_l_ = (int16_t)(((sbus_buf[5] >> 1) & 0x7F)|((sbus_buf[6] & 0x0F) << 7)) - RC_CH_VALUE_OFFSET;
-
-        WFLY_ctrl[TEMP].switch_SA = (int16_t)(((sbus_buf[6] >> 4) & 0x0F)|((sbus_buf[7] & 0x7F) << 4)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].switch_SB = (int16_t)(((sbus_buf[7] >> 7) & 0x01)|((sbus_buf[8] & 0xFF) << 1)    |((sbus_buf[9] & 0x03) << 9)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].switch_SC = (int16_t)(((sbus_buf[9] >> 2) & 0x3F)|((sbus_buf[10] & 0x1F) << 6)) - RC_CH_VALUE_OFFSET;
-        WFLY_ctrl[TEMP].switch_SD = (int16_t)(((sbus_buf[10] >> 5) & 0x07)|((sbus_buf[11] & 0xFF) << 3)) - RC_CH_VALUE_OFFSET;
-
-        WFLY_ctrl[TEMP].state_SA = WFLY_ctrl[TEMP].switch_SA >= 0 ? SWITCH_DOWN : SWITCH_UP;
-        if(WFLY_ctrl[TEMP].switch_SB == 0) WFLY_ctrl[TEMP].state_SB = SWITCH_MIDDLE;
-        else WFLY_ctrl[TEMP].state_SB = WFLY_ctrl[TEMP].switch_SB > 0 ? SWITCH_DOWN : SWITCH_UP;
-        if(WFLY_ctrl[TEMP].switch_SC == 0) WFLY_ctrl[TEMP].state_SC = SWITCH_MIDDLE;
-        else WFLY_ctrl[TEMP].state_SC = WFLY_ctrl[TEMP].switch_SC > 0 ? SWITCH_DOWN : SWITCH_UP;
-        WFLY_ctrl[TEMP].state_SD = WFLY_ctrl[TEMP].switch_SD >= 0 ? SWITCH_DOWN : SWITCH_UP;
+        WFLY_raw[0]  = (int16_t)((sbus_buf[1]         | (sbus_buf[2] << 8))                          & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[1]  = (int16_t)(((sbus_buf[2] >> 3)  | (sbus_buf[3] << 5))                          & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[2]  = (int16_t)(((sbus_buf[3] >> 6)  | (sbus_buf[4] << 2)  | (sbus_buf[5] << 10))    & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[3]  = (int16_t)(((sbus_buf[5] >> 1)  | (sbus_buf[6] << 7))                          & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[4]  = (int16_t)(((sbus_buf[6] >> 4)  | (sbus_buf[7] << 4))                          & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[5]  = (int16_t)(((sbus_buf[7] >> 7)  | (sbus_buf[8] << 1)  | (sbus_buf[9] << 9))     & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[6]  = (int16_t)(((sbus_buf[9] >> 2)  | (sbus_buf[10] << 6))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[7]  = (int16_t)(((sbus_buf[10] >> 5) | (sbus_buf[11] << 3))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[8]  = (int16_t)((sbus_buf[12]        | (sbus_buf[13] << 8))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[9]  = (int16_t)(((sbus_buf[13] >> 3) | (sbus_buf[14] << 5))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[10] = (int16_t)(((sbus_buf[14] >> 6) | (sbus_buf[15] << 2) | (sbus_buf[16] << 10))   & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[11] = (int16_t)(((sbus_buf[16] >> 1) | (sbus_buf[17] << 7))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[12] = (int16_t)(((sbus_buf[17] >> 4) | (sbus_buf[18] << 4))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[13] = (int16_t)(((sbus_buf[18] >> 7) | (sbus_buf[19] << 1) | (sbus_buf[20] << 9))    & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[14] = (int16_t)(((sbus_buf[20] >> 2) | (sbus_buf[21] << 6))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        WFLY_raw[15] = (int16_t)(((sbus_buf[21] >> 5) | (sbus_buf[22] << 3))                         & 0x07FF) - RC_CH_VALUE_OFFSET;
+        return 1;
     }
     // memcpy(&rc_ctrl[LAST], &rc_ctrl[TEMP], sizeof(RC_ctrl_t)); // 保存上一次的数据,用于按键持续按下和切换的判断
+    return 0;
 }
 
 /**
@@ -116,7 +140,8 @@ static void sbus_to_rc(const uint8_t *sbus_buf)
 static void RemoteControlRxCallback()
 {
     DaemonReload(rc_daemon_instance);         // 先喂狗
-    sbus_to_rc(rc_usart_instance->recv_buff); // 进行协议解析
+    if(sbus_to_rc(rc_usart_instance->recv_buff)) // 进行协议解析
+        WFLY_mapping();
 }
 
 /**

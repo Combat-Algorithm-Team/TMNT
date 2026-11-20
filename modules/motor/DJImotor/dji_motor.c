@@ -1,6 +1,5 @@
 #include "dji_motor.h"
 #include "general_def.h"
-#include "robot_def.h"
 #include "bsp_dwt.h"
 #include "bsp_log.h"
 #include <stdint.h>
@@ -9,7 +8,6 @@
 #define DJI_PROBE_INTERVAL_MS 100.0f
 #define DJI_OUTPUT_LIMIT_6020_3508 16384.0f
 #define DJI_OUTPUT_LIMIT_2006 10000.0f
-#define DJI_POWER_LIMIT_STEER_RATIO 0.8f
 
 static uint8_t idx = 0; // register idx,是该文件的全局电机索引,在注册时使用
 /* DJI电机的实例,此处仅保存指针,内存的分配将通过电机实例初始化时通过malloc()进行 */
@@ -44,30 +42,6 @@ static uint8_t sender_enable_flag[6] = {0};
 static uint8_t sender_registered_flag[6] = {0};
 static uint8_t group_online[6] = {0};
 static float now_ms = 0.0f;
-static PowerLimitator_s steer_limitator;
-static PowerLimitator_s wheel_limitator;
-static uint8_t power_limitator_inited = 0u;
-static uint8_t power_control_enable = 0u;
-static float power_control_max_power = 0.0f;
-
-void DJIMotorPowerControlSetMaxPower(float max_power)
-{
-    power_control_max_power = max_power > 0.0f ? max_power : 0.0f;
-}
-
-void DJIMotorPowerControlEnable(uint8_t enable)
-{
-    power_control_enable = enable ? 1u : 0u;
-}
-
-static void DJIMotorPowerControlInit(void)
-{
-    if (!power_limitator_inited) {
-        PowerLimitatorInit(&steer_limitator, &POWER_LIMITATOR_STEER_6020_DEFAULT);
-        PowerLimitatorInit(&wheel_limitator, &POWER_LIMITATOR_WHEEL_3508_DEFAULT);
-        power_limitator_inited = 1u;
-    }
-}
 
 static uint8_t DJIMotorIsOnline(DJIMotorInstance *motor, float now_ms)
 {
@@ -94,104 +68,14 @@ static int16_t DJIMotorLimitTorqueCurrent(Motor_Type_e motor_type, float output)
     return (int16_t)output;
 }
 
-static void DJIMotorFillTxBuffer(DJIMotorInstance *motor)
+static void DJIMotorFillTxBuffer(DJIMotorInstance *motor, float output)
 {
-    int16_t set = DJIMotorLimitTorqueCurrent(motor->motor_type, motor->power_limit_output);
+    int16_t set = DJIMotorLimitTorqueCurrent(motor->motor_type, output);
     uint8_t group = motor->sender_group;
     uint8_t num = motor->message_num;
 
     sender_assignment[group].tx_buff[2 * num]     = (uint8_t)(set >> 8);
     sender_assignment[group].tx_buff[2 * num + 1] = (uint8_t)(set & 0x00ff);
-}
-
-static float DJIMotorGetPowerLimitSpeedRpm(DJIMotorInstance *motor)
-{
-    if (motor->motor_type == M3508 && motor->power_limit_group == DJI_POWER_LIMIT_WHEEL) {
-        return motor->measure.speed_rpm / REDUCTION_RATIO_WHEEL;
-    }
-
-    return motor->measure.speed_rpm;
-}
-
-static void DJIMotorApplyPowerLimit(void)
-{
-    float steer_speed[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    float steer_feedback[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    float steer_command[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    uint8_t steer_active[POWER_LIMITATOR_MOTOR_COUNT] = {0u};
-    float wheel_speed[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    float wheel_feedback[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    float wheel_command[POWER_LIMITATOR_MOTOR_COUNT] = {0.0f};
-    uint8_t wheel_active[POWER_LIMITATOR_MOTOR_COUNT] = {0u};
-    float steer_max_power;
-    float steer_used_power;
-    float wheel_max_power;
-
-    if (!power_control_enable || power_control_max_power <= 0.0f) {
-        return;
-    }
-
-    DJIMotorPowerControlInit();
-
-    for (size_t i = 0; i < idx; ++i) {
-        DJIMotorInstance *motor = dji_motor_instance[i];
-        uint8_t power_index = motor->power_limit_index;
-
-        if (!DJIMotorIsOnline(motor, now_ms) || motor->stop_flag == MOTOR_STOP) {
-            continue;
-        }
-
-        if (power_index >= POWER_LIMITATOR_MOTOR_COUNT) {
-            continue;
-        }
-
-        if (motor->power_limit_group == DJI_POWER_LIMIT_STEER) {
-            steer_speed[power_index] = DJIMotorGetPowerLimitSpeedRpm(motor);
-            steer_feedback[power_index] = motor->measure.real_current;
-            steer_command[power_index] = motor->power_limit_output;
-            steer_active[power_index] = 1u;
-        } else if (motor->power_limit_group == DJI_POWER_LIMIT_WHEEL) {
-            wheel_speed[power_index] = DJIMotorGetPowerLimitSpeedRpm(motor);
-            wheel_feedback[power_index] = motor->measure.real_current;
-            wheel_command[power_index] = motor->power_limit_output;
-            wheel_active[power_index] = 1u;
-        }
-    }
-
-    steer_max_power = power_control_max_power * DJI_POWER_LIMIT_STEER_RATIO;
-    PowerLimitatorLimitCurrentsMasked(&steer_limitator,
-                                      steer_max_power,
-                                      steer_speed,
-                                      steer_feedback,
-                                      steer_command,
-                                      steer_active);
-    steer_used_power = steer_limitator.command_power < steer_max_power ? steer_limitator.command_power : steer_max_power;
-    wheel_max_power = power_control_max_power - steer_used_power;
-    if (wheel_max_power < 0.0f) {
-        wheel_max_power = 0.0f;
-    }
-
-    PowerLimitatorLimitCurrentsMasked(&wheel_limitator,
-                                      wheel_max_power,
-                                      wheel_speed,
-                                      wheel_feedback,
-                                      wheel_command,
-                                      wheel_active);
-
-    for (size_t i = 0; i < idx; ++i) {
-        DJIMotorInstance *motor = dji_motor_instance[i];
-        uint8_t power_index = motor->power_limit_index;
-
-        if (power_index >= POWER_LIMITATOR_MOTOR_COUNT) {
-            continue;
-        }
-
-        if (motor->power_limit_group == DJI_POWER_LIMIT_STEER && steer_active[power_index]) {
-            motor->power_limit_output = steer_command[power_index];
-        } else if (motor->power_limit_group == DJI_POWER_LIMIT_WHEEL && wheel_active[power_index]) {
-            motor->power_limit_output = wheel_command[power_index];
-        }
-    }
 }
 
 static void DJIMotorClearPIDIntegral(PIDInstance *pid)
@@ -338,8 +222,6 @@ DJIMotorInstance *DJIMotorInit(Motor_Init_Config_s *config)
     // motor basic setting 电机基本设置
     instance->motor_type     = config->motor_type;                     // 6020 or 2006 or 3508
     instance->motor_settings = config->controller_setting_init_config; // 正反转,闭环类型等
-    instance->power_limit_group = config->power_limit_group;
-    instance->power_limit_index = config->power_limit_index;
 
     // motor controller init 电机控制器初始化
     PIDInit(&instance->motor_controller.current_PID, &config->controller_param_init_config.current_PID);
@@ -408,20 +290,20 @@ void DJIMotorSetRef(DJIMotorInstance *motor, float ref)
     motor->motor_controller.pid_ref = ref;
 }
 
-float motorset[4];
 // 为所有电机实例计算三环PID,发送控制报文
 void DJIMotorControl()
 {
     // 直接保存一次指针引用从而减小访存的开销,同样可以提高可读性
-    uint8_t group, num; // 电机组号和组内编号
+    uint8_t group; // CAN发送组号
     uint8_t motor_online;
     DJIMotorInstance *motor;
     Motor_Control_Setting_s *motor_setting; // 电机控制参数
     Motor_Controller_s *motor_controller;   // 电机控制器
     DJI_Motor_Measure_s *measure;           // 电机测量值
     float pid_measure, pid_ref;             // 电机PID测量值和设定值
+    float motor_output[DJI_MOTOR_CNT] = {0.0f};
 
-    // 遍历所有电机实例,进行串级PID的计算并设置发送报文的值
+    // 遍历所有电机实例，计算串级PID输出
     for (size_t i = 0; i < idx; ++i) { // 减小访存开销,先保存指针引用
         if (i == 0) {
             memset(group_online, 0, sizeof(group_online));
@@ -435,7 +317,6 @@ void DJIMotorControl()
         motor_controller = &motor->motor_controller;
         measure          = &motor->measure;
         group            = motor->sender_group;
-        num              = motor->message_num;
         motor_online = DJIMotorIsOnline(motor, now_ms);
         if (motor_online) {
             group_online[group] = 1;
@@ -446,16 +327,8 @@ void DJIMotorControl()
                        motor->motor_can_instance->tx_id);
         }
 
-        if (!motor_online) {
+        if (!motor_online || motor->stop_flag == MOTOR_STOP) {
             DJIMotorClearIntegral(motor);
-            motor->power_limit_output = 0.0f;
-            continue;
-        }
-
-        if (motor->stop_flag == MOTOR_STOP) {
-            DJIMotorClearIntegral(motor);
-            motor->power_limit_output = 0.0f;
-            memset(sender_assignment[group].tx_buff + 2 * num, 0, 2u);
             continue;
         }
 
@@ -507,25 +380,21 @@ void DJIMotorControl()
         if (motor_setting->feedback_reverse_flag == FEEDBACK_DIRECTION_REVERSE)
             pid_ref *= -1;
 
-        // 获取最终输出
-        motor->power_limit_output = pid_ref;
-
         // if(motor->motor_type==GM6020&&motor->motor_can_instance->id==4) pid_ref=3000 ;
 
 #ifdef SAMPLING
-        motor->power_limit_output = motor_controller->pid_ref;
+        pid_ref = motor_controller->pid_ref;
 #endif
 
+        motor_output[i] = pid_ref;
     }
 
-    DJIMotorApplyPowerLimit();
-
+    // 打包前再次检查在线和启停状态，未输出的槽位保持为零。
     for (size_t i = 0; i < idx; ++i) {
         motor = dji_motor_instance[i];
-        if (!DJIMotorIsOnline(motor, now_ms) || motor->stop_flag == MOTOR_STOP) {
-            continue;
+        if (DJIMotorIsOnline(motor, now_ms) && motor->stop_flag != MOTOR_STOP) {
+            DJIMotorFillTxBuffer(motor, motor_output[i]);
         }
-        DJIMotorFillTxBuffer(motor);
     }
 
     // 遍历flag,检查是否要发送这一帧报文
