@@ -195,6 +195,13 @@ typedef enum {
     LOAD_INFRARED_INIT,  // 对射式红外传感器初始化
 } loader_state_e;
 
+typedef enum {
+    HOLE_NORMAL = 0,
+    HOLE_GYRO2HOLE_PRE,
+    HOLE_ENABLE,
+    HOLE_HOLE2GYRO_PRE,
+} hole_state_e;
+
 typedef struct {
     float vx;
     float vy;
@@ -244,7 +251,7 @@ typedef struct
     float gimbal_error_angle;        // 云台当前位置与目标（归中）位置的夹角
     chassis_mode_e chassis_mode;
     NUC_mode_e control_type;
-    uint8_t chassis_rotate_speed;
+    int8_t chassis_rotate_speed;
     // UI部分
     //  ...
 
@@ -255,6 +262,7 @@ typedef struct
 { // 云台角度控制
     float yaw;
     float pitch;
+    float roll;
     gimbal_mode_e gimbal_mode;
     NUC_mode_e control_type;
 
@@ -322,6 +330,7 @@ typedef struct
     uint16_t yaw_motor_single_round_angle;
     uint16_t yaw_ecd;
     uint8_t gimbal_online;
+    uint8_t roll_ok;
     float pitch_motor_pos;
 } Gimbal_Upload_Data_s;
 

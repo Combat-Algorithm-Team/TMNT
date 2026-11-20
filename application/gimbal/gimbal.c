@@ -508,7 +508,7 @@ void GimbalTask()
             DMMotorStop(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
-            DMMotorSetRef(roll_motor, 0);
+            DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
             break;
         case GIMBAL_HOLE:
             if(last_gimbal_mode != GIMBAL_HOLE)
@@ -529,7 +529,7 @@ void GimbalTask()
             DMMotorStop(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
-            DMMotorSetRef(roll_motor, 0);
+            DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
             break;
         default:
             break;

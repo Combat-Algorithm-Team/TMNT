@@ -117,6 +117,7 @@ void CommSend(void)
     comm_cmd_data.head = COMM_HEADER;
     comm_cmd_data.vx = chassis_cmd_monitor.vx;
     comm_cmd_data.vy = chassis_cmd_monitor.vy;
+    comm_cmd_data.wz = chassis_cmd_monitor.wz;
     comm_cmd_data.chassis_mode = chassis_cmd_monitor.chassis_mode;
     comm_cmd_data.chassis_rotate_speed = chassis_cmd_monitor.chassis_rotate_speed;
     comm_cmd_data.gimbal_mode = gimbal_cmd_monitor.gimbal_mode;

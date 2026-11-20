@@ -37,10 +37,11 @@ typedef struct
 typedef struct
 {
     uint8_t head;
-    float vx;                        // 前进方向速度
-    float vy;                        // 横移方向速度
+    float vx;
+    float vy;
+    float wz;
     uint8_t chassis_mode;
-    uint8_t chassis_rotate_speed;
+    int8_t chassis_rotate_speed;
     uint8_t gimbal_mode;
     float yaw_diff;
     uint8_t navi_stamp;
@@ -50,7 +51,6 @@ typedef struct
     uint8_t revive_suppression;
     uint8_t reserve[2];
     float debug_1;
-    float debug_2;
     uint8_t referee_cmd[32];
     uint8_t crc8;
 } comm_cmd_t;
@@ -65,8 +65,9 @@ typedef struct
     uint16_t shooter_referee_heat;
     uint16_t shooter_cooling_limit;
     float cap_voltage;
+    uint8_t HOLE_OK;
+    uint8_t reserve[3];
     float debug_1;
-    float debug_2;
     // uint8_t reserve[8];
     uint8_t referee_upload[32];
     uint8_t crc8;

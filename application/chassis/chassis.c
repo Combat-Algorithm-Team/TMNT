@@ -868,7 +868,7 @@ void ChassisTask()
            //  if (cap->cap_msg_s.SuperCap_open_flag_from_real == SUPERCAP_PMOS_OPEN) {
            //      vw_set = 7000;
            //  } else {
-                vw_set = 10 * ((float)chassis_cmd_recv.chassis_rotate_speed / 255.0f);
+                vw_set = 20.0f * ((float)chassis_cmd_recv.chassis_rotate_speed / 255.0f);
             // }
 
 

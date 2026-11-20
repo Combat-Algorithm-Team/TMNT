@@ -368,6 +368,20 @@ static void EmergencyHandler()
     memset(rc_mode + 1, 0, sizeof(uint8_t) * 4);
     LOGERROR("[CMD] emergency stop!");
 }
+
+int8_t DialLimit(int16_t dial)
+{
+    const int16_t dial_limit = 671;
+
+    if (dial < -dial_limit) {
+        dial = -dial_limit;
+    } else if (dial > dial_limit) {
+        dial = dial_limit;
+    }
+
+    return (int8_t)((int32_t)dial * (dial < 0 ? -INT8_MIN : INT8_MAX) / dial_limit);
+}
+
 float speed_k=1;
 float32_t nuc_yaw=-0.08;//0.003;
 float32_t nuc_pitch=0.3;
@@ -381,8 +395,11 @@ extern INS_Instance *INS;
 int16_t yaw_test_count = 1000, yaw_test_state = 1, yaw_test_range = 10;
 int16_t pitch_test_count = 1000,pitch_test_state = 1;
 float pitch_test_range = 0.05;
-uint16_t Gyro2HoleFlag = 0;
-uint16_t Hole2GyroFlag = 0;
+uint16_t gyro2HoleFlag = 0;
+uint16_t hole2GyroFlag = 0;
+gimbal_mode_e lastGimbalMode = GIMBAL_ZERO_FORCE;
+hole_state_e holeState = HOLE_NORMAL;
+
 /**
  * @brief 控制输入为遥控器(调试时)的模式和控制量设置
  *
@@ -390,7 +407,7 @@ uint16_t Hole2GyroFlag = 0;
 static void RemoteControlSet()
 {
     shoot_cmd_send.shoot_mode   = SHOOT_ON; // 发射机构常开
-    gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+
     shoot_cmd_send.shoot_rate   = 16.0f;   // 射频默认30Hz
     chassis_cmd_send.control_type = NUC_NORMAL;
 
@@ -400,8 +417,7 @@ static void RemoteControlSet()
     //     SuperCap_flag_from_user = SUPER_USER_CLOSE; // 默认关闭超电
     // }
 
-    //修改部分
-    if(WFLY_data[TEMP].state_SB == SWITCH_DOWN && WFLY_data[TEMP].state_SC == SWITCH_DOWN && WFLY_data[TEMP].state_SD == SWITCH_UP)
+    if(WFLY_data[TEMP].state_SA == SWITCH_UP)
     {    
         // NUC_cmd.delay--;
         // if(NUC_cmd.delay<=0)
@@ -427,7 +443,8 @@ static void RemoteControlSet()
         else
         {
             chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
-            chassis_cmd_send.chassis_rotate_speed = NUC_cmd.rotateMode;
+            // 上位机仍发送 0~255，减半后配合底盘的双倍倍率。
+            chassis_cmd_send.chassis_rotate_speed = (int8_t)(NUC_cmd.rotateMode / 2U);
         }
         if(NUC_cmd.terrain_state == TERRAIN_BUMP)
             chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
@@ -468,11 +485,9 @@ static void RemoteControlSet()
             //     pitch_search_flag=1;
         }
     }
-
-
-    if(WFLY_data[TEMP].state_SD == SWITCH_DOWN)
+    if(WFLY_data[TEMP].state_SA == SWITCH_DOWN)
     {
-        switch(WFLY_data[TEMP].state_SB)
+        switch(WFLY_data[TEMP].state_SG)
         {
             case SWITCH_DOWN:
                 shoot_cmd_send.friction_mode = FRICTION_OFF;
@@ -480,26 +495,82 @@ static void RemoteControlSet()
                 break;
             case SWITCH_MIDDLE:
                 shoot_cmd_send.friction_mode = FRICTION_ON;
-                shoot_cmd_send.load_mode = LOAD_STOP;
+                if(WFLY_data[TEMP].state_SH == SWITCH_UP)  shoot_cmd_send.load_mode = LOAD_1_BULLET;
+                else shoot_cmd_send.load_mode = LOAD_STOP;
                 break;
             case SWITCH_UP:
                 shoot_cmd_send.friction_mode = FRICTION_ON;
-                shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+                if(WFLY_data[TEMP].state_SH == SWITCH_UP)  shoot_cmd_send.load_mode = LOAD_BURSTFIRE;
+                else shoot_cmd_send.load_mode = LOAD_STOP;
                 break;
             default:
                 break;
         }
-        switch(WFLY_data[TEMP].state_SC)
+        if(gyro2HoleFlag == 0 && hole2GyroFlag == 0)
         {
-            case SWITCH_DOWN:
-                chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
+            if(WFLY_data[TEMP].state_SB == SWITCH_MIDDLE && lastGimbalMode == GIMBAL_GYRO_MODE)
+            {
+                gyro2HoleFlag = 1000;
+                holeState = HOLE_GYRO2HOLE_PRE;
+            }
+            if(WFLY_data[TEMP].state_SB == SWITCH_DOWN && lastGimbalMode == GIMBAL_HOLE)
+            {
+                hole2GyroFlag = 1000;
+                holeState = HOLE_HOLE2GYRO_PRE;
+            }
+        }
+        if(holeState == HOLE_GYRO2HOLE_PRE && comm_upload_data.HOLE_OK)
+        {
+            holeState = HOLE_ENABLE;
+        }
+        if(holeState == HOLE_HOLE2GYRO_PRE && gimbal_fetch_data.roll_ok)
+        {
+            holeState = HOLE_NORMAL;
+        }
+        switch(holeState)
+        {
+            case HOLE_NORMAL:
+                gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+                switch(WFLY_data[TEMP].state_SC)
+                {
+                    case SWITCH_DOWN:
+                        chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
+                        break;
+                    case SWITCH_MIDDLE:
+                        chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
+                        break;
+                    case SWITCH_UP:
+                        chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
+                        chassis_cmd_send.chassis_rotate_speed = DialLimit(WFLY_data[TEMP].dial_rf);
+                        break;
+                    default:
+                        break;
+                }
+                yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
+                pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
+                gimbal_cmd_send.roll = 0;
                 break;
-            case SWITCH_MIDDLE:
-                chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;//todo
+            case HOLE_GYRO2HOLE_PRE:
+                gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+                chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
+                yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
+                pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
+                gimbal_cmd_send.roll = 0;
                 break;
-            case SWITCH_UP:
-                chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
-                chassis_cmd_send.chassis_rotate_speed = 255;
+            case HOLE_ENABLE:
+                gimbal_cmd_send.gimbal_mode = GIMBAL_HOLE;
+                chassis_cmd_send.chassis_mode = CHASSIS_HOLE;
+                chassis_cmd_send.wz = 0.001f * (float)WFLY_data[TEMP].rocker_l_;
+                if(WFLY_data[TEMP].state_SB == SWITCH_UP)
+                    gimbal_cmd_send.roll = 0;
+                else
+                    gimbal_cmd_send.roll = 0;
+                break;
+            case HOLE_HOLE2GYRO_PRE:
+                gimbal_cmd_send.gimbal_mode = GIMBAL_HOLE;
+                chassis_cmd_send.chassis_mode = CHASSIS_HOLE;
+                chassis_cmd_send.wz = 0.001f * (float)WFLY_data[TEMP].rocker_l_;
+                gimbal_cmd_send.roll = 0;
                 break;
             default:
                 break;
@@ -507,8 +578,7 @@ static void RemoteControlSet()
         gimbal_cmd_send.control_type = NUC_NORMAL;
         chassis_cmd_send.vx = 5.0f * (float)WFLY_data[TEMP].rocker_r_; // 水平方向
         chassis_cmd_send.vy = -5.0f * (float)WFLY_data[TEMP].rocker_r1; // 竖直方向
-        yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
-        pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
+        
     }
     if(WFLY_data[TEMP].state_SD == SWITCH_UP && !(WFLY_data[TEMP].state_SB == SWITCH_DOWN && WFLY_data[TEMP].state_SC == SWITCH_DOWN))
     {
@@ -539,7 +609,7 @@ static void RemoteControlSet()
                 else
                 {
                     chassis_cmd_send.chassis_mode = CHASSIS_ROTATE;
-                    chassis_cmd_send.chassis_rotate_speed = NUC_cmd.rotateMode;
+                    chassis_cmd_send.chassis_rotate_speed = (int8_t)(NUC_cmd.rotateMode / 2U);
 
                 // chassis_cmd_send.chassis_mode = NUC_cmd.rotateMode;
                 }
@@ -604,6 +674,8 @@ static void RemoteControlSet()
                 break;
         }
     }
+    if(gyro2HoleFlag > 0) gyro2HoleFlag --;
+    if(hole2GyroFlag > 0) hole2GyroFlag --;
     rc_daemon_instance->temp_count--;
     if(rc_daemon_instance->temp_count<=0)
     {
@@ -655,7 +727,7 @@ void RobotCMDTask()
 #ifdef GIMBAL_BOARD
     GetSearchRange();
     // 根据遥控器SA判断是否急停
-    if (WFLY_data[TEMP].state_SA == SWITCH_DOWN) {
+    if (WFLY_data[TEMP].state_SF == SWITCH_DOWN) {
         EmergencyHandler(); // 调试/疯车时急停
     } else {
         RemoteControlSet();
