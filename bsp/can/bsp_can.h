@@ -11,7 +11,7 @@
 // 如果只有1个CAN,还需要把bsp_can.c中所有的hcan2变量改为hcan1(别担心,主要是总线和FIFO的负载均衡,不影响功能)
 
 /* can instance typedef, every module registered to CAN should have this variable */
-#pragma pack(1)
+/* Keep natural alignment: HAL_CAN_AddTxMessage reads txconf through a word-aligned pointer. */
 typedef struct _
 {
     CAN_HandleTypeDef *can_handle; // can句柄
@@ -26,7 +26,6 @@ typedef struct _
     void (*can_module_callback)(struct _ *); // callback needs an instance to tell among registered ones
     void *id;                                // 使用can外设的模块指针(即id指向的模块拥有此can实例,是父子关系)
 } CANInstance;
-#pragma pack()
 
 /* CAN实例初始化结构体,将此结构体指针传入注册函数 */
 typedef struct

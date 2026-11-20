@@ -194,22 +194,22 @@ void ChassisInit()
     steering_config.power_limit_index                                       = LF;
     steering_lf                                                             = DJIMotorInit(&steering_config);
 
-    steering_config.can_init_config.can_handle                              = &hcan1;
-    steering_config.can_init_config.tx_id                                   = 3;
+    steering_config.can_init_config.can_handle                              = &hcan2;
+    steering_config.can_init_config.tx_id                                   = 2;
     steering_config.power_limit_group                                       = DJI_POWER_LIMIT_STEER;
     steering_config.power_limit_index                                       = RB;
     steering_rb                                                             = DJIMotorInit(&steering_config);
 
     //  @todo: 当前未统一电机正反方向，仍需手动处理 reference 正负号，待电机模块支持后修复
-    chassis_motor_config.can_init_config.can_handle                         = &hcan2;
-    chassis_motor_config.can_init_config.tx_id                              = 2;
+    chassis_motor_config.can_init_config.can_handle                         = &hcan1;
+    chassis_motor_config.can_init_config.tx_id                              = 3;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
     chassis_motor_config.power_limit_group                                  = DJI_POWER_LIMIT_WHEEL;
     chassis_motor_config.power_limit_index                                  = LF;
     motor_lf                                                                = DJIMotorInit(&chassis_motor_config);
 
     chassis_motor_config.can_init_config.can_handle                         = &hcan1;
-    chassis_motor_config.can_init_config.tx_id                              = 2;
+    chassis_motor_config.can_init_config.tx_id                              = 4;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
     chassis_motor_config.power_limit_group                                  = DJI_POWER_LIMIT_WHEEL;
     chassis_motor_config.power_limit_index                                  = RB;

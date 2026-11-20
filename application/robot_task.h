@@ -36,7 +36,7 @@ __attribute__((noreturn)) void StartINSTASK(void *argument)
         INS_Task();
         ins_dt = 1000 * DWT_GetDeltaT(&ins_time);
         if (ins_dt > 1.2f)
-            LOGERROR("[freeRTOS] INS Task is being DELAY! dt = [%f]ms", &ins_dt);
+            LOGERROR("[freeRTOS] INS Task is being DELAY! dt = [%d]us", (int)(ins_dt * 1000.0f));
         osDelay(1);
     }
 }
@@ -60,7 +60,7 @@ __attribute__((noreturn)) void _RobotCMDTask(void *argument)
         RobotCMDTask();
         cmd_dt = 1000 * DWT_GetDeltaT(&cmd_time);
         if (cmd_dt > 1.2f)
-            LOGERROR("[freeRTOS] Robot Task is being DELAY! dt = [%f]ms", &cmd_dt);
+            LOGERROR("[freeRTOS] Robot Task is being DELAY! dt = [%d]us", (int)(cmd_dt * 1000.0f));
         osDelay(1);
     }
 }
