@@ -407,7 +407,6 @@ hole_state_e holeState = HOLE_NORMAL;
 static void RemoteControlSet()
 {
     shoot_cmd_send.shoot_mode   = SHOOT_ON; // 发射机构常开
-
     shoot_cmd_send.shoot_rate   = 16.0f;   // 射频默认30Hz
     chassis_cmd_send.control_type = NUC_NORMAL;
 
@@ -416,7 +415,7 @@ static void RemoteControlSet()
     // } else {
     //     SuperCap_flag_from_user = SUPER_USER_CLOSE; // 默认关闭超电
     // }
-
+    /*
     if(WFLY_data[TEMP].state_SA == SWITCH_UP)
     {    
         // NUC_cmd.delay--;
@@ -485,7 +484,8 @@ static void RemoteControlSet()
             //     pitch_search_flag=1;
         }
     }
-    if(WFLY_data[TEMP].state_SA == SWITCH_DOWN)
+    */
+    if(WFLY_data[TEMP].state_SE == SWITCH_DOWN)
     {
         switch(WFLY_data[TEMP].state_SG)
         {
@@ -580,6 +580,7 @@ static void RemoteControlSet()
         chassis_cmd_send.vy = -5.0f * (float)WFLY_data[TEMP].rocker_r1; // 竖直方向
         
     }
+    /*
     if(WFLY_data[TEMP].state_SD == SWITCH_UP && !(WFLY_data[TEMP].state_SB == SWITCH_DOWN && WFLY_data[TEMP].state_SC == SWITCH_DOWN))
     {
         switch(WFLY_data[TEMP].state_SC)
@@ -674,6 +675,7 @@ static void RemoteControlSet()
                 break;
         }
     }
+    */
     if(gyro2HoleFlag > 0) gyro2HoleFlag --;
     if(hole2GyroFlag > 0) hole2GyroFlag --;
     rc_daemon_instance->temp_count--;
@@ -685,7 +687,7 @@ static void RemoteControlSet()
     PitchAngleLimit(); // PITCH限位
     // 云台参数
     YawControlProcess();
-    HeatControl();
+    // HeatControl();
     // if(yaw_control > 100) yaw_control = 100;
     // if(yaw_control < -100) yaw_control = -100;
     // yaw_test_count--;
@@ -704,8 +706,6 @@ static void RemoteControlSet()
     // }
     gimbal_cmd_send.yaw   = yaw_control;
     gimbal_cmd_send.pitch = pitch_control;
-
-
 }
 
 ramp_t fb_ramp;
@@ -751,6 +751,7 @@ void RobotCMDTask()
         EmergencyHandler(); //通信离线急停
     }
 #endif
+        lastGimbalMode = gimbal_cmd_send.gimbal_mode;
     // 推送消息,双板通信,视觉通信等
     // 其他应用所需的控制数据在remotecontrolsetmode和mousekeysetmode中完成设置
     // chassis
