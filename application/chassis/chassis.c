@@ -468,8 +468,8 @@ static uint8_t supercap_task_div_cnt = 0;
         SuperCapTask();
     }
      // 设定速度参考值
-     DJIMotorSetRef(motor_rf, wheelset_rf.vt);
-     DJIMotorSetRef(motor_lb, wheelset_lb.vt);
+    DJIMotorSetRef(motor_rf, wheelset_rf.vt);
+    DJIMotorSetRef(motor_lb, wheelset_lb.vt);
  }
 
 
@@ -885,6 +885,9 @@ void ChassisTask()
             // chassis_cmd_recv.wz = -2500;
             chassis_vw          = -2;
             offset_angle       += 22.0f;
+            break;
+        case CHASSIS_HOLE:
+            chassis_vw = chassis_cmd_recv.wz;
             break;
         default:
             break;

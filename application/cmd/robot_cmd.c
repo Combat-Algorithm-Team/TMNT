@@ -180,7 +180,6 @@ static void DeterminRobotID()
 
 float yaw_control;   // 遥控器YAW自由度输入值
 float pitch_control; // 遥控器PITCH自由度输入值
-uint8_t check_count=0;
 static float pitch_search_up = 0.1f;
 static float pitch_search_down = -0.3f;
 /**
@@ -203,13 +202,8 @@ static void CalcOffsetAngle()
     if(angle < 0) angle += 360;
     chassis_cmd_send.offset_angle = angle;
     // if(gimbal_fetch_data.base_yaw_tilt->alpha > 0.07) angle -= gimbal_fetch_data.base_yaw_tilt->direction;
-    for(check_count = 0; check_count < 5; check_count++)//防止阻塞
-    {
-        if(angle <= 90 && angle >= -90) break;
-        if(angle > 90) angle -= 180;
-        if(angle < -90) angle += 180;
-    }
-    chassis_cmd_send.align_angle = angle;
+    // 抵消平移映射的换轴偏移，跟随误差按 360° 归一化。
+    chassis_cmd_send.align_angle = theta_format(chassis_cmd_send.offset_angle + 90.0f);
 }
 
 /**
@@ -526,6 +520,7 @@ static void RemoteControlSet()
         if(holeState == HOLE_HOLE2GYRO_PRE && gimbal_fetch_data.roll_ok)
         {
             holeState = HOLE_NORMAL;
+            yaw_control = gimbal_fetch_data.gimbal_imu_data->output.INS_angle_deg[INS_YAW_ADDRESS_OFFSET];
         }
         switch(holeState)
         {
@@ -743,6 +738,7 @@ void RobotCMDTask()
         chassis_cmd_send.chassis_mode           = comm_cmd_data.chassis_mode;
         chassis_cmd_send.vx                     = comm_cmd_data.vx;
         chassis_cmd_send.vy                     = comm_cmd_data.vy;
+        chassis_cmd_send.wz                     = comm_cmd_data.wz;
         chassis_cmd_send.chassis_rotate_speed   = comm_cmd_data.chassis_rotate_speed;
         gimbal_cmd_send.gimbal_mode             = comm_cmd_data.gimbal_mode;
     }

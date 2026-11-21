@@ -46,6 +46,7 @@
 #define SEARCH_RANGE                100.0f  //小yaw搜索范围（注意不要超出机械限位）
 #define SEARCH_YAW_SPEED            0.15f
 #define SEARCH_PITCH_SPEED          0.0010f
+#define ROLL_OK_THRESHOLD_RAD (5.0f * DEGREE_2_RAD)
 
 
 #define STEERING_RF_ECD             1325
