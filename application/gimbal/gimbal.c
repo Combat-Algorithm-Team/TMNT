@@ -381,7 +381,7 @@ void GimbalInit()
     //YAW
     Motor_Init_Config_s yaw_config = {
         .can_init_config = {
-            .can_handle = &hcan2,
+            .can_handle = &hcan1,
             .tx_id      = 1,
         },
         .controller_param_init_config = {
@@ -455,7 +455,7 @@ void GimbalInit()
 
     Motor_Init_Config_s roll_motor_config = {//DM4340
         .can_init_config = {
-            .can_handle = &hcan2,
+            .can_handle = &hcan1,
             .tx_id = 0x01,
             .rx_id = 0x11,
         },
@@ -578,20 +578,24 @@ void GimbalTask()
                 Iout_reset();
                 PID_para_set(OTHER_FEED);
             }
-            DJIMotorEnable(yaw_motor);
+            // DJIMotorEnable(yaw_motor);
             DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
             DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
             DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
 
-            DMMotorEnable1(pitch_motor);
+            // DMMotorEnable1(pitch_motor);
             DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
             DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
             DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
 
-            DMMotorStop(roll_motor);
+            // DMMotorStop(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
             DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
+
+            DJIMotorStop(yaw_motor);
+            DMMotorStop(pitch_motor);
+            DMMotorStop(roll_motor);
             break;
         case GIMBAL_HOLE:
             if(last_gimbal_mode != GIMBAL_HOLE)
@@ -599,20 +603,23 @@ void GimbalTask()
                 Iout_reset();
                 PID_para_set(MOTOR_FEED);
             }
-            DJIMotorEnable(yaw_motor);
+            // DJIMotorEnable(yaw_motor);
             DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, MOTOR_FEED);
             DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, MOTOR_FEED);
             DJIMotorSetRef(yaw_motor, YAW_BIG_YAW_ALIGN_ECD * ECD_ANGLE_COEF_DJI);
             
-            DMMotorEnable1(pitch_motor);
+            // DMMotorEnable1(pitch_motor);
             DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(pitch_motor, SPEED_LOOP, MOTOR_FEED);
             DMMotorSetRef(pitch_motor, PITCH_HORIZON_POS);
 
-            DMMotorStop(roll_motor);
+            // DMMotorStop(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
             DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
+            DJIMotorStop(yaw_motor);
+            DMMotorStop(pitch_motor);
+            DMMotorStop(roll_motor);
             break;
         default:
             break;
@@ -663,7 +670,8 @@ void GimbalTask()
                 PID_para_set(OTHER_FEED);
                 big_yaw_motor->motor_settings.feedforward_flag = SPEED_FEEDFORWARD;
             }
-            DMMotorEnable1(big_yaw_motor);
+            // DMMotorEnable1(big_yaw_motor);
+            DMMotorStop(big_yaw_motor);
             big_yaw_motor->motor_controller.angle_PID.Kp = big_yaw_kp;
             big_yaw_motor->motor_controller.pid_ref = big_yaw_target;
             break;
@@ -677,7 +685,8 @@ void GimbalTask()
                 // 进入过洞时锁定最近一圈的等效对齐位置。
                 DMMotorSetRef(big_yaw_motor, pos - remainderf(pos - BIG_YAW_CHASSIS_ALIGN_POS, PI2));
             }
-            DMMotorEnable1(big_yaw_motor);
+            // DMMotorEnable1(big_yaw_motor);
+            DMMotorStop(big_yaw_motor);
             break;
         default:
             break;

@@ -18,8 +18,8 @@
 
 /* 开发板类型定义，烧录时注意不要弄错对应功能；修改定义后需要重新编译；只能存在一个定义 */
 // #define ONE_BOARD // 单板控制整车
-// #define CHASSIS_BOARD // 底盘板
-#define GIMBAL_BOARD  // 云台板
+#define CHASSIS_BOARD // 底盘板
+// #define GIMBAL_BOARD  // 云台板
 
 //#define VISION_USE_VCP // 使用虚拟串口发送视觉数据
 // #define VISION_USE_UART // 使用串口发送视觉数据
@@ -35,22 +35,26 @@
 #define PITCH_POS_UP_LIMIT_ECD    4900 // 云台俯仰上限位的编码器值，机械改动后需重新标定
 #define PITCH_POS_DOWN_LIMIT_ECD  3750 // 云台俯仰下限位的编码器值，机械改动后需重新标定
 
-#define PITCH_HORIZON_POS           0.960f  // 云台水平时电机反馈位置
-#define PITCH_UP_POS                0.5f  // 云台上限位时电机反馈位置（较机械限位略保守）
-#define PITCH_DOWN_POS              1.4f  // 云台下限位时电机反馈位置（较机械限位略保守）
-#define YAW_BIG_YAW_ALIGN_ECD       5426    // 大小 Yaw 对齐时小 Yaw 编码器值
-#define YAW_LEFT_LIMIT_ECD          7000    //小Yaw左限位时电机反馈位置
-#define YAW_RIGHT_LIMIT_ECD         4000    //小Yaw右限位时电机反馈位置
-#define BIG_YAW_CHASSIS_ALIGN_POS   -1.4406f //大Yaw与底盘对齐时单机反馈位置
+#define PITCH_HORIZON_POS           -1.995f  // 云台水平时电机反馈位置
+#define PITCH_UP_POS                -1.4f  // 云台上限位时电机反馈位置（较机械限位略保守）
+#define PITCH_DOWN_POS              -2.5f  // 云台下限位时电机反馈位置（较机械限位略保守）
+#define YAW_BIG_YAW_ALIGN_ECD       2033    // 大小 Yaw 对齐时小 Yaw 编码器值
+#define YAW_LEFT_LIMIT_ECD          3500    //小Yaw左限位时电机反馈位置
+#define YAW_RIGHT_LIMIT_ECD         1500    //小Yaw右限位时电机反馈位置
+#define BIG_YAW_CHASSIS_ALIGN_POS   -1.546f //大Yaw与底盘对齐时单机反馈位置
 #define LOADER_ANGLE_PER_BULLET     3240.0f   // 拨出一发弹丸时拨盘转动角度（36 * 90）
 #define SEARCH_RANGE                100.0f  //小yaw搜索范围（注意不要超出机械限位）
 #define SEARCH_YAW_SPEED            0.15f
 #define SEARCH_PITCH_SPEED          0.0010f
-#define ROLL_OK_THRESHOLD_RAD (5.0f * DEGREE_2_RAD)
 
+#define ROLL_UP_LIMIT               1.354f
+#define ROLL_UP                     0.971f
+#define ROLL_OK_THRESHOLD_RAD       0.300f
+#define ROLL_DOWN                   -0.450f
+#define ROLL_DOEN_LIMIT             -0.513f
 
-#define STEERING_RF_ECD             1325
-#define STEERING_LB_ECD             8169
+#define STEERING_RF_ECD             3239
+#define STEERING_LB_ECD             103
 #define STEERING_RF_ANGLE           STEERING_RF_ECD * ECD_ANGLE_COEF_DJI
 #define STEERING_LB_ANGLE           STEERING_LB_ECD * ECD_ANGLE_COEF_DJI
 

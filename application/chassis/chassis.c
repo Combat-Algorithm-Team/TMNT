@@ -176,22 +176,22 @@ void ChassisInit()
         },
         .motor_type = GM6020
     };
-    steering_config.can_init_config.can_handle                              = &hcan2;
-    steering_config.can_init_config.tx_id                                   = 4;
+    steering_config.can_init_config.can_handle                              = &hcan1;
+    steering_config.can_init_config.tx_id                                   = 2;
     steering_rf                                                             = DJIMotorInit(&steering_config);
 
     steering_config.can_init_config.can_handle                              = &hcan1;
-    steering_config.can_init_config.tx_id                                   = 2;
+    steering_config.can_init_config.tx_id                                   = 1;
     steering_lb                                                             = DJIMotorInit(&steering_config);
 
     //  @todo: 当前未统一电机正反方向，仍需手动处理 reference 正负号，待电机模块支持后修复
-    chassis_motor_config.can_init_config.can_handle                         = &hcan2;
-    chassis_motor_config.can_init_config.tx_id                              = 3;
+    chassis_motor_config.can_init_config.can_handle                         = &hcan1;
+    chassis_motor_config.can_init_config.tx_id                              = 4;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
     motor_rf                                                                = DJIMotorInit(&chassis_motor_config);
 
     chassis_motor_config.can_init_config.can_handle                         = &hcan1;
-    chassis_motor_config.can_init_config.tx_id                              = 1;
+    chassis_motor_config.can_init_config.tx_id                              = 3;
     chassis_motor_config.controller_setting_init_config.motor_reverse_flag  = MOTOR_DIRECTION_NORMAL;
     motor_lb                                                                = DJIMotorInit(&chassis_motor_config);
 
@@ -819,10 +819,14 @@ void ChassisTask()
         DJIMotorStop(steering_rf);
         DJIMotorStop(steering_lb);
     } else { // 正常工作
-        DJIMotorEnable(motor_rf);
-        DJIMotorEnable(motor_lb);
-        DJIMotorEnable(steering_rf);
-        DJIMotorEnable(steering_lb);
+        // DJIMotorEnable(motor_rf);
+        // DJIMotorEnable(motor_lb);
+        // DJIMotorEnable(steering_rf);
+        // DJIMotorEnable(steering_lb);
+        DJIMotorStop(motor_rf);
+        DJIMotorStop(motor_lb);
+        DJIMotorStop(steering_rf);
+        DJIMotorStop(steering_lb);
     }
 
     static float current_speed_vw, vw_set;

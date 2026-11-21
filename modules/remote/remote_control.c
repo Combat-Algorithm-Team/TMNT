@@ -37,7 +37,7 @@ static void WFLY_mapping()
     memcpy(&WFLY_ctrl[LAST], &WFLY_ctrl[TEMP], sizeof(WFLY_ctrl_t));
 
     WFLY_ctrl[TEMP].rocker_r_ = WFLY_raw[0];
-    WFLY_ctrl[TEMP].rocker_r1 = WFLY_raw[1];
+    WFLY_ctrl[TEMP].rocker_r1 = 0;//WFLY_raw[1];
     WFLY_ctrl[TEMP].rocker_l1 = WFLY_raw[2];
     WFLY_ctrl[TEMP].rocker_l_ = WFLY_raw[3];
     WFLY_ctrl[TEMP].switch_SA = WFLY_raw[4];
