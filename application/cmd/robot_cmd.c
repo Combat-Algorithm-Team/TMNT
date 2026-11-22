@@ -553,22 +553,22 @@ static void RemoteControlSet()
                 chassis_cmd_send.chassis_mode = CHASSIS_FOLLOW_GIMBAL_YAW;
                 yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
                 pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
-                gimbal_cmd_send.roll = 0;
+                gimbal_cmd_send.roll = ROLL_UP;
                 break;
             case HOLE_ENABLE:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_HOLE;
                 chassis_cmd_send.chassis_mode = CHASSIS_HOLE;
-                chassis_cmd_send.wz = 0.001f * (float)WFLY_data[TEMP].rocker_l_;
+                chassis_cmd_send.wz = 0.005f * (float)WFLY_data[TEMP].rocker_l_;
                 if(WFLY_data[TEMP].state_SB == SWITCH_UP)
-                    gimbal_cmd_send.roll = 0;
+                    gimbal_cmd_send.roll = ROLL_DOWN;
                 else
-                    gimbal_cmd_send.roll = 0;
+                    gimbal_cmd_send.roll = ROLL_DOWN;
                 break;
             case HOLE_HOLE2GYRO_PRE:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_HOLE;
                 chassis_cmd_send.chassis_mode = CHASSIS_HOLE;
-                chassis_cmd_send.wz = 0.001f * (float)WFLY_data[TEMP].rocker_l_;
-                gimbal_cmd_send.roll = 0;
+                chassis_cmd_send.wz = 0.005f * (float)WFLY_data[TEMP].rocker_l_;
+                gimbal_cmd_send.roll = ROLL_UP;
                 break;
             default:
                 break;
