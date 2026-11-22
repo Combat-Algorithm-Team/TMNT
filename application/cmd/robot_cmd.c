@@ -226,8 +226,8 @@ static void PitchAngleLimit()
 
     pitch_angle = gimbal_fetch_data.gimbal_imu_data->output.INS_angle[INS_PITCH_ADDRESS_OFFSET];
     pitch_pos   = gimbal_fetch_data.pitch_motor_pos;
-    limit_max   = pitch_angle + pitch_pos - PITCH_UP_POS;
-    limit_min   = pitch_angle + pitch_pos - PITCH_DOWN_POS;
+    limit_max   = pitch_angle + (PITCH_UP_POS - pitch_pos);
+    limit_min   = pitch_angle + (PITCH_DOWN_POS - pitch_pos);
 
     if (pitch_control > limit_max)
         pitch_control = limit_max;
@@ -546,7 +546,7 @@ static void RemoteControlSet()
                 }
                 yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
                 pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
-                gimbal_cmd_send.roll = 0;
+                gimbal_cmd_send.roll = ROLL_UP_LIMIT - ((float)WFLY_data[TEMP].dial_lf + 671.0f) / 1342.0f * (ROLL_UP_LIMIT - ROLL_DOEN_LIMIT);
                 break;
             case HOLE_GYRO2HOLE_PRE:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;

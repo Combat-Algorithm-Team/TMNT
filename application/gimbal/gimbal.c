@@ -108,21 +108,21 @@ Motor_PID_Para_s pitch_PID_para[2] =
     {//1:OTHER_FEED
         .angle_PID = {
             .Kp            = 50,
-            .Ki            = 100,
-            .Kd            = 0.0,
+            .Ki            = 0,
+            .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 3,
-            .MaxOut        = 30,
+            .MaxOut        = 20,
         },
         .speed_PID = {
             .Kp            = 1,
-            .Ki            = 0.8,
-            .Kd            = 0.001,
+            .Ki            = 0,
+            .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 1,
-            .MaxOut        = 4,
+            .MaxOut        = 1,
         }
     }
 };
@@ -131,22 +131,22 @@ Motor_PID_Para_s roll_PID_para[2] =
 {
     {//0:MOTOR_FEED
         .angle_PID = {
-            .Kp            = 15,
+            .Kp            = 1,
             .Ki            = 0.0,
-            .Kd            = 0.01,
+            .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0.5,
-            .MaxOut        = 0,
+            .MaxOut        = 1,
         },
         .speed_PID = {
-            .Kp            = 25,
+            .Kp            = 3,
             .Ki            = 0,
-            .Kd            = 0.03,
+            .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0.5,
-            .MaxOut        = 0,
+            .MaxOut        = 3,
         }
     },
     {//1:OTHER_FEED
@@ -441,9 +441,11 @@ void GimbalInit()
             .outer_loop_type       = ANGLE_LOOP,
             .close_loop_type       = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag    = MOTOR_DIRECTION_NORMAL,
-            .feedback_reverse_flag = FEEDBACK_DIRECTION_REVERSE,
-            .feedforward_flag      = CURRENT_FEEDFORWARD,
-            .mpc_type              = MPC_SPEED_PARALLEL,
+            .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,
+            .feedforward_flag      = FEEDFORWARD_NONE,
+            .mpc_type              = SELF_PID,
+            // .feedforward_flag      = CURRENT_FEEDFORWARD,
+            // .mpc_type              = MPC_SPEED_PARALLEL,
             .control_range = {
                 .P_max = 12.5,
                 .V_max = 30,
@@ -583,18 +585,18 @@ void GimbalTask()
             DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
             DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
 
-            // DMMotorEnable1(pitch_motor);
+            DMMotorEnable1(pitch_motor);
             DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, OTHER_FEED);
             DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
             DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
 
-            // DMMotorStop(roll_motor);
+            // DMMotorEnable1(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
             DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
 
             DJIMotorStop(yaw_motor);
-            DMMotorStop(pitch_motor);
+            // DMMotorStop(pitch_motor);
             DMMotorStop(roll_motor);
             break;
         case GIMBAL_HOLE:
