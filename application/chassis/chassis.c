@@ -819,14 +819,14 @@ void ChassisTask()
         DJIMotorStop(steering_rf);
         DJIMotorStop(steering_lb);
     } else { // 正常工作
-        // DJIMotorEnable(motor_rf);
-        // DJIMotorEnable(motor_lb);
-        // DJIMotorEnable(steering_rf);
-        // DJIMotorEnable(steering_lb);
-        DJIMotorStop(motor_rf);
-        DJIMotorStop(motor_lb);
-        DJIMotorStop(steering_rf);
-        DJIMotorStop(steering_lb);
+        DJIMotorEnable(motor_rf);
+        DJIMotorEnable(motor_lb);
+        DJIMotorEnable(steering_rf);
+        DJIMotorEnable(steering_lb);
+        // DJIMotorStop(motor_rf);
+        // DJIMotorStop(motor_lb);
+        // DJIMotorStop(steering_rf);
+        // DJIMotorStop(steering_lb);
     }
 
     static float current_speed_vw, vw_set;

@@ -641,18 +641,18 @@ void GimbalTask()
     if(gimbal_cmd_recv.gimbal_mode == GIMBAL_SEARCH_MODE)
     {
         if (SearchMotorIsOnline(big_yaw_motor)) {
-            big_yaw_target += 2.0f * 0.001f;
-            big_yaw_target += speed_measure.real_wz * 0.001f;
+            big_yaw_target -= 2.0f * 0.001f;
+            big_yaw_target -= speed_measure.real_wz * 0.001f;
         }
         big_yaw_kp = 10.0f;
     }
     else
     {
-        big_yaw_target = big_yaw_motor->measure.total_pos + 1 * comm_cmd_data.yaw_diff;
+        big_yaw_target = big_yaw_motor->measure.total_pos - comm_cmd_data.yaw_diff;
         big_yaw_kp = 3.0f + (fabsf(comm_cmd_data.yaw_diff) > PI / 3.0f ? PI / 3.0f : fabsf(comm_cmd_data.yaw_diff)) / (PI / 3.0f) * 12.0f;
     }
 
-    base_yaw_vel_feedforward = speed_measure.real_wz;
+    base_yaw_vel_feedforward = -speed_measure.real_wz;
     // @todo:现在已不再需要电机反馈,实际上可以始终使用IMU的姿态数据来作为云台的反馈,yaw电机的offset只是用来跟随底盘
     // 根据控制模式进行电机反馈切换和过渡,视觉模式在robot_cmd模块就已经设置好,gimbal只看yaw_ref和pitch_ref
     switch (gimbal_cmd_recv.gimbal_mode) {

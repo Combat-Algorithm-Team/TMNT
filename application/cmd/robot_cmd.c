@@ -194,11 +194,14 @@ static void CalcOffsetAngle()
     static float angle;
     // static float gimbal_yaw_current_angle;                                                // 云台yaw轴当前角度
     // static float gimbal_yaw_set_angle;                                                    // 云台yaw轴目标角度
-    angle                               = gimbal_fetch_data.yaw_motor_single_round_angle - (BIG_YAW_CHASSIS_ALIGN_POS * RAD_2_DEGREE - 90.0f); // 从云台获取的当前yaw电机单圈角度
+    // 单圈角度含 +180° 偏移，先还原相对零位角度，再按大 Yaw 反装方向取反。
+    angle = -theta_format((float)gimbal_fetch_data.yaw_motor_single_round_angle
+                          - 180.0f - BIG_YAW_CHASSIS_ALIGN_POS * RAD_2_DEGREE);
     // gimbal_yaw_current_angle            = gimbal_fetch_data.gimbal_imu_data->output.INS_angle_deg[INS_YAW_ADDRESS_OFFSET];
     // gimbal_yaw_set_angle                = yaw_control;
     // chassis_cmd_send.gimbal_error_angle = gimbal_yaw_set_angle - gimbal_yaw_current_angle; // 云台误差角
 
+    angle -= 90.0f; // 保留云台到底盘平移映射的换轴偏移。
     if(angle < 0) angle += 360;
     chassis_cmd_send.offset_angle = angle;
     // if(gimbal_fetch_data.base_yaw_tilt->alpha > 0.07) angle -= gimbal_fetch_data.base_yaw_tilt->direction;
