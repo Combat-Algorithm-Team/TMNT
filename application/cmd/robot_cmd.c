@@ -528,7 +528,7 @@ static void RemoteControlSet()
         switch(holeState)
         {
             case HOLE_NORMAL:
-                gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
+                gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;//调参临时调整
                 switch(WFLY_data[TEMP].state_SC)
                 {
                     case SWITCH_DOWN:
@@ -546,7 +546,7 @@ static void RemoteControlSet()
                 }
                 yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
                 pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
-                gimbal_cmd_send.roll = ROLL_UP_LIMIT - ((float)WFLY_data[TEMP].dial_lf + 671.0f) / 1342.0f * (ROLL_UP_LIMIT - ROLL_DOEN_LIMIT);
+                gimbal_cmd_send.roll = ROLL_UP;//ROLL_UP_LIMIT - ((float)WFLY_data[TEMP].dial_lf + 671.0f) / 1342.0f * (ROLL_UP_LIMIT - ROLL_DOEN_LIMIT);
                 break;
             case HOLE_GYRO2HOLE_PRE:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;

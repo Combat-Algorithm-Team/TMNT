@@ -34,6 +34,7 @@ float pitch_tor_feedforward_ori = 0;
 float pitch_vel_feedforward = 0;
 float yaw_vel_feedforward = 0;
 float yaw_tor_feedforward = 0;
+float roll_tor_feedfoeward = 0;
 volatile static float yaw_tor_k = 60.0f;
 extern  NUC_cmd_t NUC_cmd;
 extern chassis_speed_measure_t speed_measure;
@@ -64,7 +65,7 @@ Motor_PID_Para_s yaw_PID_para[2] =
     },
     {//1:OTHER_FEED
         .angle_PID = {
-            .Kp             = 2,//12, // 0.24, // 0.31, // 0.45
+            .Kp             = 1,//12, // 0.24, // 0.31, // 0.45
             .Ki             = 0.0f,
             .Kd             = 0,//0.02,//0.01,
             .DeadBand       = 0.0f,
@@ -73,7 +74,7 @@ Motor_PID_Para_s yaw_PID_para[2] =
             .MaxOut         = 1000,
         },
         .speed_PID = {
-            .Kp            = 2000,//6000,//10000, //11000,
+            .Kp            = 500,//6000,//10000, //11000,
             .Ki            = 0,    // 0
             .Kd            = 0,//5, // 30
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit ,//| PID_Derivative_On_Measurement | PID_OutputFilter,
@@ -131,22 +132,22 @@ Motor_PID_Para_s roll_PID_para[2] =
 {
     {//0:MOTOR_FEED
         .angle_PID = {
-            .Kp            = 1,
+            .Kp            = 4,
             .Ki            = 0.0,
             .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0.5,
-            .MaxOut        = 1,
+            .MaxOut        = 5,
         },
         .speed_PID = {
-            .Kp            = 3,
-            .Ki            = 0,
+            .Kp            = 15,
+            .Ki            = 10,
             .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
-            .IntegralLimit = 0.5,
-            .MaxOut        = 3,
+            .IntegralLimit = 1,
+            .MaxOut        = 10,
         }
     },
     {//1:OTHER_FEED
@@ -237,6 +238,13 @@ static void UpdateRollOk(gimbal_mode_e mode, const DMMotorInstance *motor)
     gimbal_feedback_data.roll_ok =
         (mode == GIMBAL_HOLE && motor->measure.total_pos > ROLL_OK_THRESHOLD_RAD);
 }
+
+static float UpdateRollTorFeedforward()
+{
+    // up 为重力矩零位，向下偏转 90° 时前馈为 +3 N·m。
+    return 2.0f * sinf(ROLL_UP - roll_motor->measure.total_pos);
+}
+
 #endif
 
 #ifdef CHASSIS_BOARD
@@ -465,6 +473,7 @@ void GimbalInit()
         .controller_param_init_config = {
             .angle_PID = roll_PID_para[MOTOR_FEED].angle_PID,
             .speed_PID = roll_PID_para[MOTOR_FEED].speed_PID,
+            .current_feedforward_ptr = &roll_tor_feedfoeward,
         },
         .controller_setting_init_config = {
             .angle_feedback_source = MOTOR_FEED,
@@ -473,7 +482,7 @@ void GimbalInit()
             .close_loop_type       = SPEED_LOOP | ANGLE_LOOP,
             .motor_reverse_flag    = MOTOR_DIRECTION_NORMAL,
             .feedback_reverse_flag = FEEDBACK_DIRECTION_NORMAL,
-            .feedforward_flag      = FEEDFORWARD_NONE,
+            .feedforward_flag      = CURRENT_FEEDFORWARD,
             .mpc_type              = SELF_PID,
             .control_range = {
                 .P_max = 12.5,
@@ -539,6 +548,7 @@ void GimbalTask()
 
 #ifdef GIMBAL_BOARD
     pitch_tor_feedforward_ori = 0.8 * tan(0.82 - abs(gimbal_IMU_data->output.INS_angle[INS_PITCH_ADDRESS_OFFSET]));
+    roll_tor_feedfoeward = UpdateRollTorFeedforward();
     if(gimbal_cmd_recv.control_type == NUC_CONTROL)
     {
         pitch_vel_feedforward   = NUC_cmd.pitch_vel;
@@ -580,7 +590,7 @@ void GimbalTask()
                 Iout_reset();
                 PID_para_set(OTHER_FEED);
             }
-            // DJIMotorEnable(yaw_motor);
+            DJIMotorEnable(yaw_motor);
             DJIMotorChangeFeed(yaw_motor, ANGLE_LOOP, OTHER_FEED);
             DJIMotorChangeFeed(yaw_motor, SPEED_LOOP, OTHER_FEED);
             DJIMotorSetRef(yaw_motor, gimbal_cmd_recv.yaw); // yaw和pitch会在robot_cmd中处理好多圈和单圈
@@ -590,14 +600,14 @@ void GimbalTask()
             DMMotorChangeFeed(pitch_motor, SPEED_LOOP, OTHER_FEED);
             DMMotorSetRef(pitch_motor, gimbal_cmd_recv.pitch);
 
-            // DMMotorEnable1(roll_motor);
+            DMMotorEnable1(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(roll_motor, SPEED_LOOP, MOTOR_FEED);
             DMMotorSetRef(roll_motor, gimbal_cmd_recv.roll);
 
-            DJIMotorStop(yaw_motor);
+            // DJIMotorStop(yaw_motor);
             // DMMotorStop(pitch_motor);
-            DMMotorStop(roll_motor);
+            // DMMotorStop(roll_motor);
             break;
         case GIMBAL_HOLE:
             if(last_gimbal_mode != GIMBAL_HOLE)

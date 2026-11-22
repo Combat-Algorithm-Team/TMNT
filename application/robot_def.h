@@ -47,11 +47,11 @@
 #define SEARCH_YAW_SPEED            0.15f
 #define SEARCH_PITCH_SPEED          0.0010f
 
-#define ROLL_UP_LIMIT               1.354f
-#define ROLL_UP                     0.971f
-#define ROLL_OK_THRESHOLD_RAD       0.300f
-#define ROLL_DOWN                   -0.450f
-#define ROLL_DOEN_LIMIT             -0.513f
+#define ROLL_UP_LIMIT               1.909f
+#define ROLL_UP                     1.552f
+#define ROLL_OK_THRESHOLD_RAD       0.800f
+#define ROLL_DOWN                   0.100f
+#define ROLL_DOEN_LIMIT             0.022f
 
 #define STEERING_RF_ECD             3239
 #define STEERING_LB_ECD             103
