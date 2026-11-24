@@ -88,27 +88,7 @@ Motor_PID_Para_s pitch_PID_para[2] =
 {
     {//0:MOTOR_FEED
         .angle_PID = {
-            .Kp            = 30,
-            .Ki            = 0,
-            .Kd            = 0,
-            .DeadBand      = 0,
-            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
-            .IntegralLimit = 3,
-            .MaxOut        = 1,
-        },
-        .speed_PID = {
-            .Kp            = 1,
-            .Ki            = 0,
-            .Kd            = 0,
-            .DeadBand      = 0,
-            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
-            .IntegralLimit = 1,
-            .MaxOut        = 1,
-        }
-    },
-    {//1:OTHER_FEED
-        .angle_PID = {
-            .Kp            = 30,
+            .Kp            = 50,
             .Ki            = 0,
             .Kd            = 0,
             .DeadBand      = 0,
@@ -123,7 +103,27 @@ Motor_PID_Para_s pitch_PID_para[2] =
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 1,
-            .MaxOut        = 1,
+            .MaxOut        = 3,
+        }
+    },
+    {//1:OTHER_FEED
+        .angle_PID = {
+            .Kp            = 50,
+            .Ki            = 0,
+            .Kd            = 0,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 3,
+            .MaxOut        = 100,
+        },
+        .speed_PID = {
+            .Kp            = 1,
+            .Ki            = 0,
+            .Kd            = 0,
+            .DeadBand      = 0,
+            .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
+            .IntegralLimit = 1,
+            .MaxOut        = 3,
         }
     }
 };
@@ -138,7 +138,7 @@ Motor_PID_Para_s roll_PID_para[2] =
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0.5,
-            .MaxOut        = 1,
+            .MaxOut        = 3,
         },
         .speed_PID = {
             .Kp            = 15,
@@ -147,7 +147,7 @@ Motor_PID_Para_s roll_PID_para[2] =
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 1,
-            .MaxOut        = 10,
+            .MaxOut        = 15,
         }
     },
     {//1:OTHER_FEED
@@ -256,7 +256,7 @@ Motor_PID_Para_s big_yaw_PID_para[2] =
 {
     {//0:MOTOR_FEED
         .angle_PID = {
-            .Kp            = 5,
+            .Kp            = 8,
             .Ki            = 0,
             .Kd            = 0,
             .DeadBand      = 0,
@@ -271,7 +271,7 @@ Motor_PID_Para_s big_yaw_PID_para[2] =
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0,
-            .MaxOut        = 5,
+            .MaxOut        = 10,
         },
     },
     {//1:OTHER_FEED
@@ -291,7 +291,7 @@ Motor_PID_Para_s big_yaw_PID_para[2] =
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
             .IntegralLimit = 0,
-            .MaxOut        = 5,
+            .MaxOut        = 10,
         },
     },
 };
@@ -623,7 +623,10 @@ void GimbalTask()
             DMMotorEnable1(pitch_motor);
             DMMotorChangeFeed(pitch_motor, ANGLE_LOOP, MOTOR_FEED);
             DMMotorChangeFeed(pitch_motor, SPEED_LOOP, MOTOR_FEED);
-            DMMotorSetRef(pitch_motor, PITCH_DOWN_POS);
+            if(roll_motor->measure.pos < ROLL_PRE)
+                DMMotorSetRef(pitch_motor, PITCH_DOWN_POS);
+            else
+                DMMotorSetRef(pitch_motor, PITCH_HORIZON_POS);
 
             DMMotorEnable1(roll_motor);
             DMMotorChangeFeed(roll_motor, ANGLE_LOOP, MOTOR_FEED);
@@ -661,7 +664,7 @@ void GimbalTask()
     else
     {
         big_yaw_target = big_yaw_motor->measure.total_pos - comm_cmd_data.yaw_diff;
-        big_yaw_kp = 2.0f + (fabsf(comm_cmd_data.yaw_diff) > PI / 3.0f ? PI / 3.0f : fabsf(comm_cmd_data.yaw_diff)) / (PI / 3.0f) * 5.0f;
+        big_yaw_kp = 5.0f + (fabsf(comm_cmd_data.yaw_diff) > PI / 3.0f ? PI / 3.0f : fabsf(comm_cmd_data.yaw_diff)) / (PI / 3.0f) * 5.0f;
     }
 
     base_yaw_vel_feedforward = -speed_measure.real_wz;
