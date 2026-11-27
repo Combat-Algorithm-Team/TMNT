@@ -404,7 +404,7 @@ hole_state_e holeState = HOLE_NORMAL;
 static void RemoteControlSet()
 {
     shoot_cmd_send.shoot_mode   = SHOOT_ON; // 发射机构常开
-    shoot_cmd_send.shoot_rate   = 16.0f;   // 射频默认30Hz
+    shoot_cmd_send.shoot_rate   = 20.0f;   // 射频默认30Hz
     chassis_cmd_send.control_type = NUC_NORMAL;
 
     // if (rc_data[TEMP].rc.dial > 400) {
@@ -529,7 +529,7 @@ static void RemoteControlSet()
         {
             case HOLE_NORMAL:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;//调参临时调整
-                switch(WFLY_data[TEMP].state_SC)
+                switch(WFLY_data[TEMP].state_SD)
                 {
                     case SWITCH_DOWN:
                         chassis_cmd_send.chassis_mode = CHASSIS_NO_FOLLOW;
@@ -546,7 +546,7 @@ static void RemoteControlSet()
                 }
                 yaw_control-= YAW_K * (float)WFLY_data[TEMP].rocker_l_;
                 pitch_control-=PITCH_K * (float)WFLY_data[TEMP].rocker_l1;
-                gimbal_cmd_send.roll = ROLL_UP;//ROLL_UP_LIMIT - ((float)WFLY_data[TEMP].dial_lf + 671.0f) / 1342.0f * (ROLL_UP_LIMIT - ROLL_DOEN_LIMIT);
+                gimbal_cmd_send.roll = ROLL_UP;
                 break;
             case HOLE_GYRO2HOLE_PRE:
                 gimbal_cmd_send.gimbal_mode = GIMBAL_GYRO_MODE;
@@ -560,7 +560,7 @@ static void RemoteControlSet()
                 chassis_cmd_send.chassis_mode = CHASSIS_HOLE;
                 chassis_cmd_send.wz = 0.005f * (float)WFLY_data[TEMP].rocker_l_;
                 if(WFLY_data[TEMP].state_SB == SWITCH_UP)
-                    gimbal_cmd_send.roll = ROLL_DOWN;
+                    gimbal_cmd_send.roll = ROLL_UP_LIMIT - ((float)WFLY_data[TEMP].dial_lf + 671.0f) / 1342.0f * (ROLL_UP_LIMIT - ROLL_DOEN_LIMIT);
                 else
                     gimbal_cmd_send.roll = ROLL_DOWN;
                 break;

@@ -133,11 +133,11 @@ Motor_PID_Para_s roll_PID_para[2] =
     {//0:MOTOR_FEED
         .angle_PID = {
             .Kp            = 4,
-            .Ki            = 0.0,
+            .Ki            = 0.5,
             .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,
-            .IntegralLimit = 0.5,
+            .IntegralLimit = 1,
             .MaxOut        = 3,
         },
         .speed_PID = {
@@ -257,7 +257,7 @@ Motor_PID_Para_s big_yaw_PID_para[2] =
     {//0:MOTOR_FEED
         .angle_PID = {
             .Kp            = 8,
-            .Ki            = 0,
+            .Ki            = 2,
             .Kd            = 0,
             .DeadBand      = 0,
             .Improve       = PID_Trapezoid_Intergral | PID_Integral_Limit,

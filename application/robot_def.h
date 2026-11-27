@@ -38,21 +38,21 @@
 #define PITCH_HORIZON_POS           -1.995f  // 云台水平时电机反馈位置
 #define PITCH_UP_POS                -1.4f  // 云台上限位时电机反馈位置（较机械限位略保守）
 #define PITCH_DOWN_POS              -2.4f  // 云台下限位时电机反馈位置（较机械限位略保守）
-#define YAW_BIG_YAW_ALIGN_ECD       2033    // 大小 Yaw 对齐时小 Yaw 编码器值
+#define YAW_BIG_YAW_ALIGN_ECD       2018    // 大小 Yaw 对齐时小 Yaw 编码器值
 #define YAW_LEFT_LIMIT_ECD          3500    //小Yaw左限位时电机反馈位置
 #define YAW_RIGHT_LIMIT_ECD         1500    //小Yaw右限位时电机反馈位置
-#define BIG_YAW_CHASSIS_ALIGN_POS   -1.495f //大Yaw与底盘对齐时电机反馈位置
+#define BIG_YAW_CHASSIS_ALIGN_POS   -1.875f //大Yaw与底盘对齐时电机反馈位置
 #define LOADER_ANGLE_PER_BULLET     3240.0f   // 拨出一发弹丸时拨盘转动角度（36 * 90）
 #define SEARCH_RANGE                100.0f  //小yaw搜索范围（注意不要超出机械限位）
 #define SEARCH_YAW_SPEED            0.15f
 #define SEARCH_PITCH_SPEED          0.0010f
 
-#define ROLL_UP_LIMIT               1.909f
-#define ROLL_UP                     1.552f
-#define ROLL_OK_THRESHOLD_RAD       0.800f
-#define ROLL_DOWN                   0.100f
-#define ROLL_DOEN_LIMIT             0.022f
-#define ROLL_PRE                    0.400f
+#define ROLL_UP_LIMIT               1.589f
+#define ROLL_UP                     1.208f
+#define ROLL_OK_THRESHOLD_RAD       0.5f
+#define ROLL_DOWN                   -0.200f
+#define ROLL_DOEN_LIMIT             -0.316f
+#define ROLL_PRE                    0.200f
 
 #define STEERING_RF_ECD             3239
 #define STEERING_LB_ECD             103
